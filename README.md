@@ -1,13 +1,25 @@
 # ChronaHLE
 
-ChronaHLE is an experimental high-level emulator for classic 32-bit iPhone OS
-and iOS applications. It reimplements system frameworks such as Foundation,
-UIKit, OpenGL ES, AudioToolbox and Objective-C runtime services while Dynarmic
-executes the guest ARM code.
+ChronaHLE is an experimental high-level emulator targeting the complete
+32-bit era from iPhone OS 1 through iOS 6. The goal is one emulator for games
+and applications across these releases, with compatibility expanded globally
+through reusable framework and system API implementations rather than
+per-game patches.
+
+ChronaHLE reimplements Foundation, UIKit, OpenGL ES, AudioToolbox, Objective-C
+runtime services and other parts of iOS while Dynarmic executes guest ARM code.
+Support is still developed and verified application by application, so the
+iPhone OS 1-iOS 6 target range does not yet mean every application works.
+
+Long term, ChronaHLE is designed to grow beyond the 32-bit generation. The
+roadmap includes a new ARM64 guest execution and ABI layer, 64-bit Mach-O
+loading, and the newer APIs needed to make iOS 7 and later applications
+possible. This is an architectural direction, not implemented compatibility
+today.
 
 ChronaHLE is derived from [touchHLE](https://github.com/touchHLE/touchHLE) and
-retains its commit history, license notices and third-party acknowledgements.
-See [FORK_NOTICE.md](FORK_NOTICE.md) for the exact relationship.
+retains the required license notices and third-party acknowledgements. See
+[FORK_NOTICE.md](FORK_NOTICE.md) for the exact relationship.
 
 > ChronaHLE is early development software. Compatibility is per-application,
 > and no Apple software, applications, games or encryption keys are included.
@@ -15,10 +27,12 @@ See [FORK_NOTICE.md](FORK_NOTICE.md) for the exact relationship.
 ## Current scope
 
 - Guest CPU: ARMv6 and ARMv7 (32-bit) through Dynarmic.
-- Guest OS APIs: original iPhone OS APIs plus ongoing iOS 4-iOS 6 expansion.
+- Guest OS target: iPhone OS 1 through iOS 6, with compatibility still varying
+  by application and release.
 - Graphics: OpenGL ES 1.1 and an expanding OpenGL ES 2.0 compatibility path.
 - Hosts: Windows, Linux and Android share the same Rust core.
-- ARM64 iOS guests are a planned new execution/API layer, not implemented yet.
+- Future scope: ARM64 guest execution and iOS 7+ API expansion. Neither is
+  implemented yet.
 
 ## Platform status
 
