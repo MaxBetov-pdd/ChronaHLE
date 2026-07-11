@@ -1,0 +1,166 @@
+diff --git a/src/dynarmic/frontend/A32/decoder/asimd.inc b/src/dynarmic/frontend/A32/decoder/asimd.inc
+index d0dfd867..9dd1f245 100644
+--- a/src/dynarmic/frontend/A32/decoder/asimd.inc
++++ b/src/dynarmic/frontend/A32/decoder/asimd.inc
+@@ -59,11 +59,11 @@ INST(v8_SHA256SU1,          "SHA256SU1",                "111100110D10nnnndddd110
+ // Three registers of different lengths
+ INST(asimd_VADDL,           "VADDL/VADDW",              "1111001U1Dzznnnndddd000oN0M0mmmm") // ASIMD
+ INST(asimd_VSUBL,           "VSUBL/VSUBW",              "1111001U1Dzznnnndddd001oN0M0mmmm") // ASIMD
+-//INST(asimd_VADDHN,          "VADDHN",                   "111100101-----------0100-0-0----") // ASIMD
+-//INST(asimd_VRADDHN,         "VRADDHN",                  "111100111-----------0100-0-0----") // ASIMD
++INST(asimd_VADDHN,          "VADDHN",                   "111100101Dzznnnndddd0100N0M0mmmm") // ASIMD
++INST(asimd_VRADDHN,         "VRADDHN",                  "111100111Dzznnnndddd0100N0M0mmmm") // ASIMD
+ INST(asimd_VABAL,           "VABAL",                    "1111001U1Dzznnnndddd0101N0M0mmmm") // ASIMD
+-//INST(asimd_VSUBHN,          "VSUBHN",                   "111100101-----------0110-0-0----") // ASIMD
+-//INST(asimd_VRSUBHN,         "VRSUBHN",                  "111100111-----------0110-0-0----") // ASIMD
++INST(asimd_VSUBHN,          "VSUBHN",                   "111100101Dzznnnndddd0110N0M0mmmm") // ASIMD
++INST(asimd_VRSUBHN,         "VRSUBHN",                  "111100111Dzznnnndddd0110N0M0mmmm") // ASIMD
+ INST(asimd_VABDL,           "VABDL",                    "1111001U1Dzznnnndddd0111N0M0mmmm") // ASIMD
+ INST(asimd_VMLAL,           "VMLAL/VMLSL",              "1111001U1Dzznnnndddd10o0N0M0mmmm") // ASIMD
+ //INST(asimd_VQDMLAL,         "VQDMLAL",                  "111100101-----------10-1-0-0----") // ASIMD
+diff --git a/src/dynarmic/frontend/A32/translate/impl/a32_translate_impl.h b/src/dynarmic/frontend/A32/translate/impl/a32_translate_impl.h
+index 44ac2450..25ff3e50 100644
+--- a/src/dynarmic/frontend/A32/translate/impl/a32_translate_impl.h
++++ b/src/dynarmic/frontend/A32/translate/impl/a32_translate_impl.h
+@@ -888,7 +888,11 @@ struct TranslatorVisitor final {
+     // Advanced SIMD three registers with different lengths
+     bool asimd_VADDL(bool U, bool D, size_t sz, size_t Vn, size_t Vd, bool op, bool N, bool M, size_t Vm);
+     bool asimd_VSUBL(bool U, bool D, size_t sz, size_t Vn, size_t Vd, bool op, bool N, bool M, size_t Vm);
++    bool asimd_VADDHN(bool D, size_t sz, size_t Vn, size_t Vd, bool N, bool M, size_t Vm);
++    bool asimd_VRADDHN(bool D, size_t sz, size_t Vn, size_t Vd, bool N, bool M, size_t Vm);
+     bool asimd_VABAL(bool U, bool D, size_t sz, size_t Vn, size_t Vd, bool N, bool M, size_t Vm);
++    bool asimd_VSUBHN(bool D, size_t sz, size_t Vn, size_t Vd, bool N, bool M, size_t Vm);
++    bool asimd_VRSUBHN(bool D, size_t sz, size_t Vn, size_t Vd, bool N, bool M, size_t Vm);
+     bool asimd_VABDL(bool U, bool D, size_t sz, size_t Vn, size_t Vd, bool N, bool M, size_t Vm);
+     bool asimd_VMLAL(bool U, bool D, size_t sz, size_t Vn, size_t Vd, bool op, bool N, bool M, size_t Vm);
+     bool asimd_VMULL(bool U, bool D, size_t sz, size_t Vn, size_t Vd, bool P, bool N, bool M, size_t Vm);
+diff --git a/src/dynarmic/frontend/A32/translate/impl/asimd_three_regs.cpp b/src/dynarmic/frontend/A32/translate/impl/asimd_three_regs.cpp
+index a69f39bf..c64d7bff 100644
+--- a/src/dynarmic/frontend/A32/translate/impl/asimd_three_regs.cpp
++++ b/src/dynarmic/frontend/A32/translate/impl/asimd_three_regs.cpp
+@@ -27,6 +27,16 @@ enum class WidenBehaviour {
+     Both,
+ };
+
++enum class HighNarrowingOperation {
++    Add,
++    Subtract,
++};
++
++enum class RoundingBehavior {
++    None,
++    Round,
++};
++
+ template<bool WithDst, typename Callable>
+ bool BitwiseInstruction(TranslatorVisitor& v, bool D, size_t Vn, size_t Vd, bool N, bool Q, bool M, size_t Vm, Callable fn) {
+     if (Q && (mcl::bit::get_bit<0>(Vd) || mcl::bit::get_bit<0>(Vn) || mcl::bit::get_bit<0>(Vm))) {
+@@ -241,6 +251,39 @@ bool WideInstruction(TranslatorVisitor& v, bool U, bool D, size_t sz, size_t Vn,
+     return true;
+ }
+
++bool HighNarrowingInstruction(TranslatorVisitor& v, bool D, size_t sz, size_t Vn, size_t Vd, bool N, bool M, size_t Vm, HighNarrowingOperation operation, RoundingBehavior rounding) {
++    if (sz == 0b11) {
++        return v.DecodeError();
++    }
++
++    if (mcl::bit::get_bit<0>(Vn) || mcl::bit::get_bit<0>(Vm)) {
++        return v.UndefinedInstruction();
++    }
++
++    const size_t source_esize = 16U << sz;
++    const size_t destination_esize = source_esize / 2;
++    const auto d = ToVector(false, Vd, D);
++    const auto n = ToVector(true, Vn, N);
++    const auto m = ToVector(true, Vm, M);
++
++    const auto reg_n = v.ir.GetVector(n);
++    const auto reg_m = v.ir.GetVector(m);
++    auto wide = operation == HighNarrowingOperation::Add
++                  ? v.ir.VectorAdd(source_esize, reg_n, reg_m)
++                  : v.ir.VectorSub(source_esize, reg_n, reg_m);
++
++    if (rounding == RoundingBehavior::Round) {
++        const u64 round_constant = 1ULL << (destination_esize - 1);
++        const auto round_operand = v.ir.VectorBroadcast(source_esize, v.I(source_esize, round_constant));
++        wide = v.ir.VectorAdd(source_esize, wide, round_operand);
++    }
++
++    const auto high_half = v.ir.VectorLogicalShiftRight(source_esize, wide, static_cast<u8>(destination_esize));
++    const auto result = v.ir.VectorNarrow(source_esize, high_half);
++    v.ir.SetVector(d, result);
++    return true;
++}
++
+ }  // Anonymous namespace
+
+ // ASIMD Three registers of the same length
+@@ -911,10 +954,26 @@ bool TranslatorVisitor::asimd_VSUBL(bool U, bool D, size_t sz, size_t Vn, size_t
+     });
+ }
+
++bool TranslatorVisitor::asimd_VADDHN(bool D, size_t sz, size_t Vn, size_t Vd, bool N, bool M, size_t Vm) {
++    return HighNarrowingInstruction(*this, D, sz, Vn, Vd, N, M, Vm, HighNarrowingOperation::Add, RoundingBehavior::None);
++}
++
++bool TranslatorVisitor::asimd_VRADDHN(bool D, size_t sz, size_t Vn, size_t Vd, bool N, bool M, size_t Vm) {
++    return HighNarrowingInstruction(*this, D, sz, Vn, Vd, N, M, Vm, HighNarrowingOperation::Add, RoundingBehavior::Round);
++}
++
+ bool TranslatorVisitor::asimd_VABAL(bool U, bool D, size_t sz, size_t Vn, size_t Vd, bool N, bool M, size_t Vm) {
+     return AbsoluteDifferenceLong(*this, U, D, sz, Vn, Vd, N, M, Vm, AccumulateBehavior::Accumulate);
+ }
+
++bool TranslatorVisitor::asimd_VSUBHN(bool D, size_t sz, size_t Vn, size_t Vd, bool N, bool M, size_t Vm) {
++    return HighNarrowingInstruction(*this, D, sz, Vn, Vd, N, M, Vm, HighNarrowingOperation::Subtract, RoundingBehavior::None);
++}
++
++bool TranslatorVisitor::asimd_VRSUBHN(bool D, size_t sz, size_t Vn, size_t Vd, bool N, bool M, size_t Vm) {
++    return HighNarrowingInstruction(*this, D, sz, Vn, Vd, N, M, Vm, HighNarrowingOperation::Subtract, RoundingBehavior::Round);
++}
++
+ bool TranslatorVisitor::asimd_VABDL(bool U, bool D, size_t sz, size_t Vn, size_t Vd, bool N, bool M, size_t Vm) {
+     return AbsoluteDifferenceLong(*this, U, D, sz, Vn, Vd, N, M, Vm, AccumulateBehavior::None);
+ }
+diff --git a/tests/A32/test_arm_instructions.cpp b/tests/A32/test_arm_instructions.cpp
+index 3232f1a8..8c3a793e 100644
+--- a/tests/A32/test_arm_instructions.cpp
++++ b/tests/A32/test_arm_instructions.cpp
+@@ -18,6 +18,37 @@ static A32::UserConfig GetUserConfig(ArmTestEnv* testenv) {
+     return user_config;
+ }
+
++TEST_CASE("arm: vaddhn.i32 with overlapping destination", "[arm][A32][ASIMD]") {
++    ArmTestEnv test_env;
++    A32::Jit jit{GetUserConfig(&test_env)};
++    test_env.code_mem = {
++        0xf2dee4aa,  // vaddhn.i32 d30, q15, q13
++        0xeafffffe,  // b +#0
++    };
++
++    // q15, which overlaps the d30 destination.
++    jit.ExtRegs()[60] = 0x00010002;
++    jit.ExtRegs()[61] = 0x7fff0001;
++    jit.ExtRegs()[62] = 0xffff0000;
++    jit.ExtRegs()[63] = 0x12345678;
++
++    // q13.
++    jit.ExtRegs()[52] = 0x00020003;
++    jit.ExtRegs()[53] = 0x0001ffff;
++    jit.ExtRegs()[54] = 0x00020001;
++    jit.ExtRegs()[55] = 0xedcba988;
++
++    jit.Regs()[15] = 0;
++    jit.SetCpsr(0x00000010);  // User-mode
++
++    test_env.ticks_left = 1;
++    jit.Run();
++
++    REQUIRE(jit.ExtRegs()[60] == 0x80010003);
++    REQUIRE(jit.ExtRegs()[61] == 0x00000001);
++    REQUIRE(jit.Regs()[15] == 4);
++}
++
+ TEST_CASE("arm: Opt Failure: Const folding in MostSignificantWord", "[arm][A32]") {
+     // This was a randomized test-case that was failing.
+     // This was due to constant folding for MostSignificantWord

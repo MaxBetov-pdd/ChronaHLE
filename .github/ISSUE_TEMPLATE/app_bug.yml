@@ -1,0 +1,65 @@
+name: Application compatibility bug
+description: Report a regression or incorrect behavior in ChronaHLE.
+labels: [compatibility]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not attach or link to IPA files, extracted commercial applications,
+        Apple SDK content, encryption keys or other copyrighted assets.
+  - type: input
+    attributes:
+      label: Application name and version
+      placeholder: Example Game 1.0
+    validations:
+      required: true
+  - type: input
+    attributes:
+      label: Bundle identifier
+      placeholder: com.example.game
+    validations:
+      required: true
+  - type: input
+    attributes:
+      label: ChronaHLE version or commit
+      placeholder: v0.3.0-dev+0123456789
+    validations:
+      required: true
+  - type: dropdown
+    attributes:
+      label: Host platform
+      options:
+        - Windows x86_64
+        - Linux x86_64
+        - Android ARM64
+    validations:
+      required: true
+  - type: input
+    attributes:
+      label: GPU and driver
+      placeholder: AMD Radeon / driver version
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Reproduction steps
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Actual and expected behavior
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Relevant log excerpt
+      description: Include the smallest useful excerpt and remove private paths or data.
+      render: text
+  - type: checkboxes
+    attributes:
+      label: Confirmation
+      options:
+        - label: I tested the exact ChronaHLE version listed above.
+          required: true
+        - label: I did not attach or link to copyrighted application files.
+          required: true

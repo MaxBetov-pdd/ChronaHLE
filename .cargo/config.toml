@@ -1,0 +1,10 @@
+[build]
+# the documentation for the touchHLE crate is intended to include private items
+# alas this isn't scoped to that crate!
+rustdocflags = ["--document-private-items"]
+
+[env]
+# CMake 4 removed compatibility defaults still requested by the SDL version
+# used by the upstream rust-sdl2 fork. This cache variable is understood by
+# both CMake 3.x and 4.x and keeps clean builds reproducible.
+CMAKE_POLICY_VERSION_MINIMUM = { value = "3.5", force = false }
