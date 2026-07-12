@@ -182,7 +182,7 @@ cargoNdk {
         "RUSTFLAGS" to "-C link-arg=-Wl,-z,max-page-size=16384 -C link-arg=-Wl,-z,common-page-size=16384",
         // Forced inclusion keeps the obsolete pollAll declaration intact and
         // rewrites only SDL's call to the supported pollOnce API.
-        "CFLAGS" to "-include\"$sdlNdk28CompatHeader\"",
+        "CFLAGS" to "-include $sdlNdk28CompatHeader",
     )
 
     if (DefaultNativePlatform.host().operatingSystem.isWindows) {
