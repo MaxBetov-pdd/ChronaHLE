@@ -66,16 +66,21 @@ fn main() {
     // This is Windows- and Android-specific because on macOS or Linux, you can
     // easily get Boost with a package manager.
     let os = env::var("CARGO_CFG_TARGET_OS").expect("CARGO_CFG_TARGET_OS was not set");
+    let host = env::var("HOST").expect("HOST was not set");
     let boost_path = workspace_root.join("vendor/boost");
-    if (os.eq_ignore_ascii_case("windows") || os.eq_ignore_ascii_case("android"))
-        && !boost_path.is_dir()
-    {
+    let needs_vendored_boost = os.eq_ignore_ascii_case("windows")
+        || (os.eq_ignore_ascii_case("android") && host.contains("windows"));
+    if needs_vendored_boost && !boost_path.is_dir() {
         panic!("Could not find Boost. Download it from https://www.boost.org/users/download/ and put it at vendor/boost");
     }
     // Allow providing Boost manually regardless of what platform we're on
     // (or whether the target platform was detected correctly…)
     if boost_path.is_dir() {
         build.define("Boost_INCLUDE_DIR", boost_path);
+    } else if Path::new("/usr/include/boost").is_dir() {
+        // Android cross-CMake restricts its default search roots to the NDK.
+        // CI installs host Boost headers, so point CMake at them explicitly.
+        build.define("Boost_INCLUDE_DIR", "/usr/include");
     }
     // Prevent CMake from using macOS-only linker commands when cross-compiling
     // for Android.

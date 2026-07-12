@@ -11,15 +11,15 @@ function Apply-VendorPatch {
     $submodulePath = Join-Path $repositoryRoot $Submodule
     $patchPath = Join-Path $repositoryRoot $Patch
 
-    & git -C $submodulePath apply --check $patchPath 2>&1 | Out-Null
+    & git -C $submodulePath apply --ignore-space-change --ignore-whitespace --check $patchPath 2>&1 | Out-Null
     if ($LASTEXITCODE -eq 0) {
-        & git -C $submodulePath apply $patchPath
+        & git -C $submodulePath apply --ignore-space-change --ignore-whitespace $patchPath
         if ($LASTEXITCODE -ne 0) { throw "Could not apply $Patch" }
         Write-Host "Applied $Patch"
         return
     }
 
-    & git -C $submodulePath apply --reverse --check $patchPath 2>&1 | Out-Null
+    & git -C $submodulePath apply --ignore-space-change --ignore-whitespace --reverse --check $patchPath 2>&1 | Out-Null
     if ($LASTEXITCODE -eq 0) {
         Write-Host "Already applied: $Patch"
         return

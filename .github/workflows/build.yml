@@ -64,7 +64,7 @@ jobs:
         run: cargo fmt --all -- --check
 
       - name: Unit tests
-        run: cargo test --lib
+        run: cargo test --release --lib
 
       - name: Release build
         run: cargo build --release --bin touchHLE
