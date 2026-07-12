@@ -39,6 +39,7 @@ fun join(prefix: String, separator: String, branding: String): String {
 }
 
 val generatedRuntimeAssets = layout.buildDirectory.dir("generated/chronahle/runtime-assets")
+val sdlNdk28CompatHeader = rootDir.parentFile.resolve("android/sdl-ndk28-compat.h").absolutePath
 val syncRuntimeAssets by tasks.registering(Sync::class) {
     into(generatedRuntimeAssets)
     from(rootDir.parentFile.resolve("touchHLE_default_options.txt"))
@@ -179,9 +180,9 @@ cargoNdk {
         "CMAKE_MODULE_LINKER_FLAGS" to "-Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384",
         "CMAKE_SHARED_LINKER_FLAGS" to "-Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384",
         "RUSTFLAGS" to "-C link-arg=-Wl,-z,max-page-size=16384 -C link-arg=-Wl,-z,common-page-size=16384",
-        // NDK 28 rejects SDL 2.26's obsolete pollAll call. Both APIs have the
-        // same signature; compile the bundled SDL against the supported API.
-        "CFLAGS" to "-DALooper_pollAll=ALooper_pollOnce",
+        // Forced inclusion keeps the obsolete pollAll declaration intact and
+        // rewrites only SDL's call to the supported pollOnce API.
+        "CFLAGS" to "-include\"$sdlNdk28CompatHeader\"",
     )
 
     if (DefaultNativePlatform.host().operatingSystem.isWindows) {

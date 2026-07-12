@@ -41,7 +41,7 @@ index a69f39bf..c64d7bff 100644
 @@ -27,6 +27,16 @@ enum class WidenBehaviour {
      Both,
  };
-
+ 
 +enum class HighNarrowingOperation {
 +    Add,
 +    Subtract,
@@ -58,7 +58,7 @@ index a69f39bf..c64d7bff 100644
 @@ -241,6 +251,39 @@ bool WideInstruction(TranslatorVisitor& v, bool U, bool D, size_t sz, size_t Vn,
      return true;
  }
-
+ 
 +bool HighNarrowingInstruction(TranslatorVisitor& v, bool D, size_t sz, size_t Vn, size_t Vd, bool N, bool M, size_t Vm, HighNarrowingOperation operation, RoundingBehavior rounding) {
 +    if (sz == 0b11) {
 +        return v.DecodeError();
@@ -93,12 +93,12 @@ index a69f39bf..c64d7bff 100644
 +}
 +
  }  // Anonymous namespace
-
+ 
  // ASIMD Three registers of the same length
 @@ -911,10 +954,26 @@ bool TranslatorVisitor::asimd_VSUBL(bool U, bool D, size_t sz, size_t Vn, size_t
      });
  }
-
+ 
 +bool TranslatorVisitor::asimd_VADDHN(bool D, size_t sz, size_t Vn, size_t Vd, bool N, bool M, size_t Vm) {
 +    return HighNarrowingInstruction(*this, D, sz, Vn, Vd, N, M, Vm, HighNarrowingOperation::Add, RoundingBehavior::None);
 +}
@@ -110,7 +110,7 @@ index a69f39bf..c64d7bff 100644
  bool TranslatorVisitor::asimd_VABAL(bool U, bool D, size_t sz, size_t Vn, size_t Vd, bool N, bool M, size_t Vm) {
      return AbsoluteDifferenceLong(*this, U, D, sz, Vn, Vd, N, M, Vm, AccumulateBehavior::Accumulate);
  }
-
+ 
 +bool TranslatorVisitor::asimd_VSUBHN(bool D, size_t sz, size_t Vn, size_t Vd, bool N, bool M, size_t Vm) {
 +    return HighNarrowingInstruction(*this, D, sz, Vn, Vd, N, M, Vm, HighNarrowingOperation::Subtract, RoundingBehavior::None);
 +}
@@ -129,7 +129,7 @@ index 3232f1a8..8c3a793e 100644
 @@ -18,6 +18,37 @@ static A32::UserConfig GetUserConfig(ArmTestEnv* testenv) {
      return user_config;
  }
-
+ 
 +TEST_CASE("arm: vaddhn.i32 with overlapping destination", "[arm][A32][ASIMD]") {
 +    ArmTestEnv test_env;
 +    A32::Jit jit{GetUserConfig(&test_env)};
