@@ -89,6 +89,12 @@ fn main() {
         build.define("CMAKE_SYSTEM_NAME", "Android");
         build.define("CMAKE_SYSTEM_VERSION", "21");
         build.define("ANDROID", "ON");
+        if let Some(ndk_path) = ["ANDROID_NDK_HOME", "ANDROID_NDK", "NDK_HOME"]
+            .iter()
+            .find_map(|name| env::var_os(name))
+        {
+            build.define("CMAKE_ANDROID_NDK", Path::new(&ndk_path));
+        }
     }
     // dynarmic can't be dynamically linked
     let dynarmic_out = build.build();
