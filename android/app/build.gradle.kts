@@ -179,6 +179,9 @@ cargoNdk {
         "CMAKE_MODULE_LINKER_FLAGS" to "-Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384",
         "CMAKE_SHARED_LINKER_FLAGS" to "-Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384",
         "RUSTFLAGS" to "-C link-arg=-Wl,-z,max-page-size=16384 -C link-arg=-Wl,-z,common-page-size=16384",
+        // NDK 28 rejects SDL 2.26's obsolete pollAll call. Both APIs have the
+        // same signature; compile the bundled SDL against the supported API.
+        "CFLAGS" to "-DALooper_pollAll=ALooper_pollOnce",
     )
 
     if (DefaultNativePlatform.host().operatingSystem.isWindows) {
