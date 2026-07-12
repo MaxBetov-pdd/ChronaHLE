@@ -122,11 +122,13 @@ fn main() {
             .join("build/externals/fmt")
             .join(build_type_windows()),
     );
-    link_lib(if cfg!(debug_assertions) {
-        "fmtd"
-    } else {
-        "fmt"
-    });
+    link_lib(
+        if os.eq_ignore_ascii_case("windows") && cfg!(debug_assertions) {
+            "fmtd"
+        } else {
+            "fmt"
+        },
+    );
     link_search(
         &dynarmic_out
             .join("build/externals/mcl/src")
