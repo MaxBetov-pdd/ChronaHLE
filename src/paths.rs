@@ -3,18 +3,18 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
-//! Paths for host files used by touchHLE: settings, fonts, etc.
+//! Paths for host files used by ChronaHLE: settings, fonts, etc.
 //!
 //! There are three categories of files:
 //!
-//! * Resources bundled with touchHLE that neither touchHLE nor the user should
+//! * Resources bundled with ChronaHLE that neither ChronaHLE nor the user should
 //!   modify: [DYLIBS_DIR], [FONTS_DIR], [DEFAULT_OPTIONS_FILE]. Depending on
 //!   the platform these may or may not be ordinary files, and must be accessed
 //!   through [ResourceFile].
-//! * Files the user is expected to modify, but not touchHLE: [APPS_DIR],
+//! * Files the user is expected to modify, but not ChronaHLE: [APPS_DIR],
 //!   [USER_OPTIONS_FILE], [WALLPAPER_FILES]. These are ordinary files and are
 //!   found in [user_data_base_path].
-//! * Files that touchHLE will create and modify, and the user may modify if
+//! * Files that ChronaHLE will create and modify, and the user may modify if
 //!   they want to: [SANDBOX_DIR]. These are ordinary files and are found in
 //!   [user_data_base_path].
 //!
@@ -26,17 +26,20 @@ use std::io::{Read, Seek};
 use std::path::{Path, PathBuf};
 
 /// Name of the directory containing ARMv6 dynamic libraries bundled with
-/// touchHLE.
-pub const DYLIBS_DIR: &str = "touchHLE_dylibs";
+/// ChronaHLE.
+pub const DYLIBS_DIR: &str = "ChronaHLE_dylibs";
+const LEGACY_DYLIBS_DIR: &str = "touchHLE_dylibs";
 
-/// Name of the directory containing fonts bundled with touchHLE.
-pub const FONTS_DIR: &str = "touchHLE_fonts";
+/// Name of the directory containing fonts bundled with ChronaHLE.
+pub const FONTS_DIR: &str = "ChronaHLE_fonts";
+const LEGACY_FONTS_DIR: &str = "touchHLE_fonts";
 
-/// Name of the file containing touchHLE's default options for various apps.
-pub const DEFAULT_OPTIONS_FILE: &str = "touchHLE_default_options.txt";
+/// Name of the file containing ChronaHLE's default options for various apps.
+pub const DEFAULT_OPTIONS_FILE: &str = "ChronaHLE_default_options.txt";
+const LEGACY_DEFAULT_OPTIONS_FILE: &str = "touchHLE_default_options.txt";
 
-/// macOS-only: If touchHLE is located in a .app bundle, return the path of the
-/// Resources directory. If touchHLE is not located in a .app bundle, return
+/// macOS-only: If ChronaHLE is located in a .app bundle, return the path of the
+/// Resources directory. If ChronaHLE is not located in a .app bundle, return
 /// [None].
 #[allow(dead_code)]
 fn get_macos_bundled_resources_path() -> Option<PathBuf> {
@@ -51,8 +54,30 @@ fn get_macos_bundled_resources_path() -> Option<PathBuf> {
     }
 }
 
-/// Abstraction over a platform-specific type for accessing a resource bundled
-/// with touchHLE.
+#[cfg(target_os = "android")]
+fn open_resource(path: &str) -> Result<sdl2::rwops::RWops<'static>, String> {
+    sdl2::rwops::RWops::from_file(path, "r")
+}
+
+#[cfg(not(target_os = "android"))]
+fn open_resource(path: &str) -> Result<std::fs::File, String> {
+    let base_path = get_macos_bundled_resources_path();
+    let path = base_path.as_deref().unwrap_or(Path::new(".")).join(path);
+    std::fs::File::open(path).map_err(|e| e.to_string())
+}
+
+fn legacy_resource_path(path: &str) -> Option<String> {
+    if path == DEFAULT_OPTIONS_FILE {
+        Some(LEGACY_DEFAULT_OPTIONS_FILE.to_string())
+    } else if let Some(suffix) = path.strip_prefix(DYLIBS_DIR) {
+        Some(format!("{LEGACY_DYLIBS_DIR}{suffix}"))
+    } else {
+        path.strip_prefix(FONTS_DIR)
+            .map(|suffix| format!("{LEGACY_FONTS_DIR}{suffix}"))
+    }
+}
+
+/// Abstraction over a platform-specific type for accessing a bundled resource.
 pub struct ResourceFile {
     #[cfg(target_os = "android")]
     file: sdl2::rwops::RWops<'static>,
@@ -61,21 +86,20 @@ pub struct ResourceFile {
 }
 impl ResourceFile {
     pub fn open(path: &str) -> Result<Self, String> {
-        Ok(Self {
-            // On Android, these resources are included as "assets" within the
-            // APK. We access them via SDL2's wrapper of Android's assets API.
-            #[cfg(target_os = "android")]
-            file: sdl2::rwops::RWops::from_file(path, "r")?,
-
-            // On other OSes, resources are accessed as ordinary files.
-            #[cfg(not(target_os = "android"))]
-            file: {
-                let base_path = get_macos_bundled_resources_path();
-                // When not in a bundle, look in the current directory.
-                let path = base_path.as_deref().unwrap_or(Path::new(".")).join(path);
-                std::fs::File::open(path).map_err(|e| e.to_string())?
-            },
-        })
+        let file = match open_resource(path) {
+            Ok(file) => file,
+            Err(primary_error) => {
+                let Some(legacy_path) = legacy_resource_path(path) else {
+                    return Err(primary_error);
+                };
+                open_resource(&legacy_path).map_err(|legacy_error| {
+                    format!(
+                        "{primary_error}; legacy resource {legacy_path:?} also failed: {legacy_error}"
+                    )
+                })?
+            }
+        };
+        Ok(Self { file })
     }
     pub fn get(&mut self) -> &mut (impl Read + Seek) {
         &mut self.file
@@ -88,29 +112,37 @@ impl std::fmt::Debug for ResourceFile {
 }
 
 /// Whether various resources are in user-accessible files. If they aren't,
-/// touchHLE has to be able to display their license terms.
+/// ChronaHLE has to be able to display their license terms.
 pub const RESOURCES_ARE_EXTERNAL_FILES: bool = cfg!(not(target_os = "android"));
 
 /// Name of the directory where the user can put apps if they want them to
 /// appear in the app picker.
-pub const APPS_DIR: &str = "touchHLE_apps";
+pub const APPS_DIR: &str = "ChronaHLE_apps";
+const LEGACY_APPS_DIR: &str = "touchHLE_apps";
 
 /// Name of the file intended for the user's own options.
-pub const USER_OPTIONS_FILE: &str = "touchHLE_options.txt";
+pub const USER_OPTIONS_FILE: &str = "ChronaHLE_options.txt";
+const LEGACY_USER_OPTIONS_FILE: &str = "touchHLE_options.txt";
 
 /// Names of files the user can put a wallpaper image (for the app picker) in.
 #[allow(unused)]
 pub const WALLPAPER_FILES: &[&str] = &[
+    "ChronaHLE_wallpaper.png",
+    "ChronaHLE_wallpaper.jpg",
+    "ChronaHLE_wallpaper.jpeg",
+];
+const LEGACY_WALLPAPER_FILES: &[&str] = &[
     "touchHLE_wallpaper.png",
     "touchHLE_wallpaper.jpg",
     "touchHLE_wallpaper.jpeg",
 ];
 
-/// Name of the directory where touchHLE will store sandboxed app data, e.g.
+/// Name of the directory where ChronaHLE will store sandboxed app data, e.g.
 /// the `Documents` directory.
-pub const SANDBOX_DIR: &str = "touchHLE_sandbox";
+pub const SANDBOX_DIR: &str = "ChronaHLE_sandbox";
+const LEGACY_SANDBOX_DIR: &str = "touchHLE_sandbox";
 
-/// Get a platform-specific base path needed for accessing touchHLE's
+/// Get a platform-specific base path needed for accessing ChronaHLE's
 /// user-modifiable files. This is empty on platforms other than Android.
 pub fn user_data_base_path() -> Cow<'static, Path> {
     #[cfg(target_os = "android")]
@@ -136,12 +168,12 @@ pub fn user_data_base_path() -> Cow<'static, Path> {
     }
     #[cfg(not(target_os = "android"))]
     {
-        // When touchHLE is run from a .app bundle on macOS, the user might not
+        // When ChronaHLE is run from a .app bundle on macOS, the user might not
         // be able to control the current directory, so user data needs to go in
         // a standard location.
         if get_macos_bundled_resources_path().is_some() {
             return Cow::from(PathBuf::from(
-                sdl2::filesystem::pref_path("touchhle.org", "touchHLE").unwrap(),
+                sdl2::filesystem::pref_path("chronahle.xyz", "ChronaHLE").unwrap(),
             ));
         }
         Cow::from(Path::new("."))
@@ -178,14 +210,48 @@ pub fn url_for_opening_user_data_dir() -> Result<String, String> {
     }
 }
 
-/// Only meaningful on certain OSes: create the user data directory if it
-/// doesn't exist, and populate it with templates or README files. (On other
-/// platforms these are simply bundled with touchHLE in a ZIP file.)
+fn migrate_legacy_path(base_path: &Path, legacy_name: &str, current_name: &str) {
+    let legacy_path = base_path.join(legacy_name);
+    let current_path = base_path.join(current_name);
+    if current_path.exists() || !legacy_path.exists() {
+        return;
+    }
+    match std::fs::rename(&legacy_path, &current_path) {
+        Ok(()) => {
+            log!(
+                "Migrated legacy ChronaHLE data: {} -> {}",
+                legacy_path.display(),
+                current_path.display()
+            );
+        }
+        Err(error) => {
+            log!(
+                "Warning: Couldn't migrate {} to {}: {}",
+                legacy_path.display(),
+                current_path.display(),
+                error
+            );
+        }
+    }
+}
+
+fn migrate_legacy_user_data(base_path: &Path) {
+    migrate_legacy_path(base_path, LEGACY_APPS_DIR, APPS_DIR);
+    migrate_legacy_path(base_path, LEGACY_SANDBOX_DIR, SANDBOX_DIR);
+    migrate_legacy_path(base_path, LEGACY_USER_OPTIONS_FILE, USER_OPTIONS_FILE);
+    for (&legacy_name, &current_name) in LEGACY_WALLPAPER_FILES.iter().zip(WALLPAPER_FILES) {
+        migrate_legacy_path(base_path, legacy_name, current_name);
+    }
+}
+
+/// Create the user data directory, migrate legacy names and populate templates.
 pub fn prepopulate_user_data_dir() {
+    let base_path = user_data_base_path();
+    migrate_legacy_user_data(&base_path);
+
     if std::env::consts::OS != "android" && std::env::consts::OS != "macos" {
         return;
     }
-    let base_path = user_data_base_path();
     if base_path == Path::new(".") {
         return;
     }
@@ -217,14 +283,17 @@ pub fn prepopulate_user_data_dir() {
     if !apps_dir_readme.is_file() {
         let content = include_str!(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/touchHLE_apps/README.txt"
+            "/ChronaHLE_apps/README.txt"
         ));
         create_file(&apps_dir_readme, content);
     }
 
     let user_options = base_path.join(USER_OPTIONS_FILE);
     if !user_options.is_file() {
-        let content = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/touchHLE_options.txt"));
+        let content = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/ChronaHLE_options.txt"
+        ));
         create_file(&user_options, content);
     }
 

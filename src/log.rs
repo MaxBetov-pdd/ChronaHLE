@@ -5,8 +5,89 @@
  */
 //! Logging and terminal output macros.
 
-use std::fs::File;
-use std::sync::LazyLock;
+use std::any::Any;
+use std::backtrace::Backtrace;
+use std::fs::{File, OpenOptions};
+use std::io::Write;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{LazyLock, Mutex, Once};
+
+static LAST_PANIC_SUMMARY: LazyLock<Mutex<Option<String>>> = LazyLock::new(Default::default);
+static CRASH_FILE_STARTED: AtomicBool = AtomicBool::new(false);
+
+fn panic_payload(payload: &(dyn Any + Send)) -> String {
+    if let Some(message) = payload.downcast_ref::<&str>() {
+        (*message).to_string()
+    } else if let Some(message) = payload.downcast_ref::<String>() {
+        message.clone()
+    } else {
+        "(non-string payload)".to_string()
+    }
+}
+
+fn persist_crash_report(summary: &str) {
+    let base_path = crate::paths::user_data_base_path();
+    let current_path = base_path.join("ChronaHLE_crash.log");
+    let previous_path = base_path.join("ChronaHLE_crash.previous.log");
+    let first_panic_this_run = !CRASH_FILE_STARTED.swap(true, Ordering::SeqCst);
+
+    if first_panic_this_run {
+        let _ = std::fs::remove_file(&previous_path);
+        if current_path.is_file() {
+            let _ = std::fs::rename(&current_path, &previous_path);
+        }
+    }
+
+    let file = if first_panic_this_run {
+        File::create(&current_path)
+    } else {
+        OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&current_path)
+    };
+    let Ok(mut file) = file else { return };
+    let _ = writeln!(file, "{summary}");
+    let _ = writeln!(file, "Host backtrace:\n{}", Backtrace::force_capture());
+    let _ = writeln!(file, "\n---\n");
+}
+
+/// Install a panic hook that keeps the source location available to popup
+/// handlers and preserves two crash reports across launches.
+pub fn install_panic_hook() {
+    static INSTALL_HOOK: Once = Once::new();
+    INSTALL_HOOK.call_once(|| {
+        #[cfg(not(target_os = "android"))]
+        let previous_hook = std::panic::take_hook();
+
+        std::panic::set_hook(Box::new(move |info| {
+            let payload = panic_payload(info.payload());
+            let summary = if let Some(location) = info.location() {
+                format!("Panic at {location}: {payload}")
+            } else {
+                format!("Panic: {payload}")
+            };
+            if let Ok(mut last_panic) = LAST_PANIC_SUMMARY.lock() {
+                *last_panic = Some(summary.clone());
+            }
+            persist_crash_report(&summary);
+
+            #[cfg(target_os = "android")]
+            sdl2::log::log(&summary);
+            #[cfg(not(target_os = "android"))]
+            previous_hook(info);
+        }));
+    });
+}
+
+/// Return the most recent panic with its source location for a crash popup.
+pub fn take_panic_summary(payload: &(dyn Any + Send)) -> String {
+    LAST_PANIC_SUMMARY
+        .lock()
+        .ok()
+        .and_then(|mut report| report.take())
+        .unwrap_or_else(|| panic_payload(payload))
+}
 
 /// Get a handle to the log file. This is only for use by logging macros!
 ///
@@ -15,7 +96,7 @@ use std::sync::LazyLock;
 /// who don't have access to ADB, so we also write to a log file.
 pub fn get_log_file() -> &'static File {
     static LOG_FILE: LazyLock<File> = LazyLock::new(|| {
-        File::create(crate::paths::user_data_base_path().join("touchHLE_log.txt")).unwrap()
+        File::create(crate::paths::user_data_base_path().join("ChronaHLE_log.txt")).unwrap()
     });
 
     &LOG_FILE
@@ -63,7 +144,7 @@ macro_rules! log_once {
 }
 
 /// Print a message (with implicit newline). This should be used for all
-/// touchHLE output that isn't coming from the app itself.
+/// ChronaHLE output that isn't coming from the app itself.
 ///
 /// Prefer use [log] or [log_dbg] for errors and warnings during emulation.
 macro_rules! echo {
@@ -111,6 +192,6 @@ macro_rules! echo_no_panic {
     }
 }
 
-/// Put modules to enable [log_dbg] for here, e.g. "touchHLE::mem" to see when
+/// Put modules to enable [log_dbg] for here, e.g. "chronahle::mem" to see when
 /// memory is allocated and freed.
 pub const ENABLED_MODULES: &[&str] = &[];

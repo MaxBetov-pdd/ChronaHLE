@@ -12,7 +12,7 @@
 //! depending on the value of `pname`, using the upper bound (4 in this case)
 //! every time is never going to cause a problem in practice.
 
-use touchHLE_gl_bindings::gles11::{
+use chronahle_gl_bindings::gles11::{
     ARRAY_BUFFER, ARRAY_BUFFER_BINDING, ELEMENT_ARRAY_BUFFER, ELEMENT_ARRAY_BUFFER_BINDING,
     WRITE_ONLY_OES,
 };
@@ -25,7 +25,11 @@ use crate::objc::nil;
 use crate::Environment;
 
 use std::slice::from_raw_parts;
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::{
+    atomic::{AtomicU32, Ordering},
+    OnceLock,
+};
+use std::time::{Duration, Instant};
 
 // These types are the same size in guest code (32-bit) and host code (64-bit).
 use crate::gles::gles11_raw::types::{
@@ -61,6 +65,22 @@ const SUPPORTED_COMPRESSED_TEXTURE_FORMATS: &[GLenum] = &[
 static NEXT_QUERY_EXT_ID: AtomicU32 = AtomicU32::new(1);
 static DRAW_TRACE_COUNT: AtomicU32 = AtomicU32::new(0);
 const GL_CURRENT_PROGRAM: GLenum = 0x8B8D;
+
+fn profile_stalls() -> bool {
+    static PROFILE_STALLS: OnceLock<bool> = OnceLock::new();
+    *PROFILE_STALLS.get_or_init(|| crate::host_env_var_os("PROFILE_STALLS").is_some())
+}
+
+fn log_slow_gl_call(started: Option<Instant>, description: impl std::fmt::Display) {
+    let Some(started) = started else { return };
+    let elapsed = started.elapsed();
+    if elapsed >= Duration::from_millis(10) {
+        log!(
+            "Slow OpenGL call {description}: {:.1} ms",
+            elapsed.as_secs_f64() * 1000.0
+        );
+    }
+}
 
 /// Sync the current context and performs a function `f` within it.
 ///
@@ -125,8 +145,8 @@ where
 }
 
 fn trace_draw_call(gles: &mut dyn GLES, kind: &str, mode: GLenum, count: GLsizei) {
-    let Some(limit) = std::env::var("TOUCHHLE_TRACE_DRAWS")
-        .ok()
+    let Some(limit) = crate::host_env_var_os("TRACE_DRAWS")
+        .and_then(|value| value.into_string().ok())
         .and_then(|value| value.parse::<u32>().ok())
     else {
         return;
@@ -318,7 +338,9 @@ fn glHint(env: &mut Environment, target: GLenum, mode: GLenum) {
     with_ctx_and_mem(env, |gles, _mem| unsafe { gles.Hint(target, mode) })
 }
 fn glFinish(env: &mut Environment) {
-    with_ctx_and_mem(env, |gles, _mem| unsafe { gles.Finish() })
+    let started = profile_stalls().then(Instant::now);
+    with_ctx_and_mem(env, |gles, _mem| unsafe { gles.Finish() });
+    log_slow_gl_call(started, "glFinish");
 }
 fn glFlush(env: &mut Environment) {
     with_ctx_and_mem(env, |gles, _mem| unsafe { gles.Flush() })
@@ -770,7 +792,9 @@ fn glShaderSource(
     })
 }
 fn glCompileShader(env: &mut Environment, shader: GLuint) {
-    with_ctx_and_mem(env, |gles, _mem| unsafe { gles.CompileShader(shader) })
+    let started = profile_stalls().then(Instant::now);
+    with_ctx_and_mem(env, |gles, _mem| unsafe { gles.CompileShader(shader) });
+    log_slow_gl_call(started, format_args!("glCompileShader({shader})"));
 }
 fn glGetShaderiv(env: &mut Environment, shader: GLuint, pname: GLenum, params: MutPtr<GLint>) {
     with_ctx_and_mem(env, |gles, mem| {
@@ -856,7 +880,9 @@ fn glGetAttribLocation(env: &mut Environment, program: GLuint, name: ConstPtr<GL
     })
 }
 fn glLinkProgram(env: &mut Environment, program: GLuint) {
-    with_ctx_and_mem(env, |gles, _mem| unsafe { gles.LinkProgram(program) })
+    let started = profile_stalls().then(Instant::now);
+    with_ctx_and_mem(env, |gles, _mem| unsafe { gles.LinkProgram(program) });
+    log_slow_gl_call(started, format_args!("glLinkProgram({program})"));
 }
 fn glValidateProgram(env: &mut Environment, program: GLuint) {
     with_ctx_and_mem(env, |gles, _mem| unsafe { gles.ValidateProgram(program) })
@@ -1298,12 +1324,17 @@ fn glVertexPointer(
 
 // Drawing
 fn glDrawArrays(env: &mut Environment, mode: GLenum, first: GLint, count: GLsizei) {
+    let started = profile_stalls().then(Instant::now);
     with_ctx_and_mem(env, |gles, _mem| unsafe {
         trace_draw_call(gles, "glDrawArrays", mode, count);
         let fog_state_backup = clamp_fog_state_values(gles);
         gles.DrawArrays(mode, first, count);
         restore_fog_state_values(gles, fog_state_backup);
-    })
+    });
+    log_slow_gl_call(
+        started,
+        format_args!("glDrawArrays(mode={mode:#x}, count={count})"),
+    );
 }
 fn glDrawElements(
     env: &mut Environment,
@@ -1312,6 +1343,7 @@ fn glDrawElements(
     type_: GLenum,
     indices: ConstVoidPtr,
 ) {
+    let started = profile_stalls().then(Instant::now);
     with_ctx_and_mem(env, |gles, mem| unsafe {
         trace_draw_call(gles, "glDrawElements", mode, count);
         let fog_state_backup = clamp_fog_state_values(gles);
@@ -1323,7 +1355,11 @@ fn glDrawElements(
         );
         gles.DrawElements(mode, count, type_, indices);
         restore_fog_state_values(gles, fog_state_backup);
-    })
+    });
+    log_slow_gl_call(
+        started,
+        format_args!("glDrawElements(mode={mode:#x}, count={count}, type={type_:#x})"),
+    );
 }
 
 // Clearing
@@ -1574,7 +1610,7 @@ fn glTexParameteriv(env: &mut Environment, target: GLenum, pname: GLenum, params
     with_ctx_and_mem(env, |gles, mem| unsafe {
         let params = mem.ptr_at(params, 1 /* upper bound */);
         gles.TexParameteriv(target, pname, params)
-    })
+    });
 }
 fn glTexParameterfv(
     env: &mut Environment,
@@ -1687,6 +1723,7 @@ fn glTexImage2D(
     type_: GLenum,
     pixels: ConstVoidPtr,
 ) {
+    let started = profile_stalls().then(Instant::now);
     let scale_hack = env.options.scale_hack.get() as GLsizei;
     let scale_empty_screen_texture = scale_hack != 1
         && pixels.is_null()
@@ -1730,7 +1767,13 @@ fn glTexImage2D(
             type_,
             pixels,
         )
-    })
+    });
+    log_slow_gl_call(
+        started,
+        format_args!(
+            "glTexImage2D({width}x{height}, host={host_width}x{host_height}, format={format:#x}, type={type_:#x})"
+        ),
+    );
 }
 fn glTexSubImage2D(
     env: &mut Environment,
@@ -1744,6 +1787,7 @@ fn glTexSubImage2D(
     type_: GLenum,
     pixels: ConstVoidPtr,
 ) {
+    let started = profile_stalls().then(Instant::now);
     with_ctx_and_mem(env, |gles, mem| unsafe {
         let pixel_count: GuestUSize = width.checked_mul(height).unwrap().try_into().unwrap();
         let size = image_size_estimate(pixel_count, format, type_);
@@ -1751,7 +1795,11 @@ fn glTexSubImage2D(
         gles.TexSubImage2D(
             target, level, xoffset, yoffset, width, height, format, type_, pixels,
         )
-    })
+    });
+    log_slow_gl_call(
+        started,
+        format_args!("glTexSubImage2D({width}x{height}, format={format:#x}, type={type_:#x})"),
+    );
 }
 fn glCompressedTexImage2D(
     env: &mut Environment,
@@ -1764,6 +1812,7 @@ fn glCompressedTexImage2D(
     image_size: GLsizei,
     data: ConstVoidPtr,
 ) {
+    let started = profile_stalls().then(Instant::now);
     with_ctx_and_mem(env, |gles, mem| unsafe {
         let data = mem
             .ptr_at(data.cast::<u8>(), image_size.try_into().unwrap())
@@ -1778,7 +1827,13 @@ fn glCompressedTexImage2D(
             image_size,
             data,
         )
-    })
+    });
+    log_slow_gl_call(
+        started,
+        format_args!(
+            "glCompressedTexImage2D({width}x{height}, format={internalformat:#x}, bytes={image_size})"
+        ),
+    );
 }
 fn glCopyTexImage2D(
     env: &mut Environment,
@@ -2201,16 +2256,20 @@ fn glMapBufferOES(env: &mut Environment, target: GLenum, access: GLenum) -> MutP
     // "forwarding" of read/writes until the moment the buffer is unmapped.
     assert!(matches!(target, ARRAY_BUFFER | ELEMENT_ARRAY_BUFFER));
     assert!(access == WRITE_ONLY_OES);
+    let Some(current_ctx) = env
+        .framework_state
+        .opengles
+        .current_ctx_for_thread(env.current_thread)
+        .as_ref()
+        .copied()
+    else {
+        log!("Warning: glMapBufferOES called without a current EAGLContext");
+        return nil.cast();
+    };
     let buffer_object_name = _get_currently_bound_buffer_object_name(env, target);
 
     let existing_mapping = {
-        let current_ctx = env
-            .framework_state
-            .opengles
-            .current_ctx_for_thread(env.current_thread);
-        let current_ctx_host_object = env
-            .objc
-            .borrow_mut::<EAGLContextHostObject>(current_ctx.unwrap());
+        let current_ctx_host_object = env.objc.borrow_mut::<EAGLContextHostObject>(current_ctx);
         current_ctx_host_object
             .mapped_buffers
             .remove(&buffer_object_name)
@@ -2246,13 +2305,7 @@ fn glMapBufferOES(env: &mut Environment, target: GLenum, access: GLenum) -> MutP
                 .copy_from_slice(from_raw_parts(host_buffer as *mut u8, buffer_size as usize));
         }
 
-        let current_ctx = env
-            .framework_state
-            .opengles
-            .current_ctx_for_thread(env.current_thread);
-        let current_ctx_host_object = env
-            .objc
-            .borrow_mut::<EAGLContextHostObject>(current_ctx.unwrap());
+        let current_ctx_host_object = env.objc.borrow_mut::<EAGLContextHostObject>(current_ctx);
         if let Some((old_guest_buffer, _old_host_buffer)) = current_ctx_host_object
             .mapped_buffers
             .insert(buffer_object_name, (guest_buffer, host_buffer))
@@ -2280,13 +2333,17 @@ fn glUnmapBufferOES(env: &mut Environment, target: GLenum) -> GLboolean {
     // The guest buffer is deallocated here
     let buffer_object_name = _get_currently_bound_buffer_object_name(env, target);
 
-    let current_ctx = env
+    let Some(current_ctx) = env
         .framework_state
         .opengles
-        .current_ctx_for_thread(env.current_thread);
-    let current_ctx_host_object = env
-        .objc
-        .borrow_mut::<EAGLContextHostObject>(current_ctx.unwrap());
+        .current_ctx_for_thread(env.current_thread)
+        .as_ref()
+        .copied()
+    else {
+        log!("Warning: glUnmapBufferOES called without a current EAGLContext");
+        return 0;
+    };
+    let current_ctx_host_object = env.objc.borrow_mut::<EAGLContextHostObject>(current_ctx);
 
     if let Some((guest_buffer, host_buffer)) = current_ctx_host_object
         .mapped_buffers

@@ -1,20 +1,21 @@
 #!/bin/sh
 set -e
 
-# Bundles the touchHLE executable with the basic set of files needed for
-# touchHLE to run (the same ones found in the macOS .app bundle or Android APK).
+# Bundles the ChronaHLE executable with the basic set of files needed to run
+# (the same ones found in the Android APK).
 # This does not prepare a full release.
 
 if [[ $# == 1 ]]; then
     PATH_TO_BINARY="$1"
     shift
 
-    rm -rf touchHLE_windows_bundle
-    mkdir touchHLE_windows_bundle
-    cp $PATH_TO_BINARY touchHLE_windows_bundle/
-    cp -r ../touchHLE_dylibs touchHLE_windows_bundle/
-    cp -r ../touchHLE_fonts touchHLE_windows_bundle/
-    cp -r ../touchHLE_default_options.txt touchHLE_windows_bundle/
+    rm -rf ChronaHLE_windows_bundle
+    mkdir ChronaHLE_windows_bundle
+    cp "$PATH_TO_BINARY" ChronaHLE_windows_bundle/ChronaHLE.exe
+    cp -r ../ChronaHLE_dylibs ChronaHLE_windows_bundle/
+    cp -r ../ChronaHLE_fonts ChronaHLE_windows_bundle/
+    cp ../ChronaHLE_default_options.txt ChronaHLE_windows_bundle/
+    cp ../LICENSE ../FORK_NOTICE.md ../README.md ChronaHLE_windows_bundle/
 else
     echo "Incorrect usage."
     exit 1

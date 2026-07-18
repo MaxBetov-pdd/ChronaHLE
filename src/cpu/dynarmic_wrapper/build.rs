@@ -5,7 +5,7 @@
  */
 use std::env;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 fn rerun_if_changed(path: &Path) {
     println!("cargo:rerun-if-changed={}", path.to_str().unwrap());
@@ -76,6 +76,7 @@ fn main() {
     // Allow providing Boost manually regardless of what platform we're on
     // (or whether the target platform was detected correctly…)
     if boost_path.is_dir() {
+        let boost_path = path_for_cmake(&boost_path);
         build.define("Boost_INCLUDE_DIR", boost_path);
     } else if Path::new("/usr/include/boost").is_dir() {
         // Android cross-CMake restricts its default search roots to the NDK.
@@ -88,12 +89,18 @@ fn main() {
     if os.eq_ignore_ascii_case("android") {
         build.define("CMAKE_SYSTEM_NAME", "Android");
         build.define("CMAKE_SYSTEM_VERSION", "21");
+        build.define("CMAKE_ANDROID_ARCH_ABI", "arm64-v8a");
         build.define("ANDROID", "ON");
         if let Some(ndk_path) = ["ANDROID_NDK_HOME", "ANDROID_NDK", "NDK_HOME"]
             .iter()
             .find_map(|name| env::var_os(name))
         {
-            build.define("CMAKE_ANDROID_NDK", Path::new(&ndk_path));
+            let ndk_path = path_for_cmake(Path::new(&ndk_path));
+            build.define("CMAKE_ANDROID_NDK", ndk_path);
+        }
+        if let Some(ninja_path) = env::var_os("CMAKE_MAKE_PROGRAM") {
+            let ninja_path = path_for_cmake(Path::new(&ninja_path));
+            build.define("CMAKE_MAKE_PROGRAM", ninja_path);
         }
     }
     // dynarmic can't be dynamically linked
@@ -168,4 +175,12 @@ fn main() {
         .include(dynarmic_out.join("include"))
         .compile("dynarmic_wrapper");
     rerun_if_changed(&package_root.join("lib.cpp"));
+}
+
+fn path_for_cmake(path: &Path) -> PathBuf {
+    if cfg!(windows) {
+        PathBuf::from(path.to_string_lossy().replace('\\', "/"))
+    } else {
+        path.to_path_buf()
+    }
 }

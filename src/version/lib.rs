@@ -1,7 +1,3 @@
-// Allow the crate to have a non-snake-case name (touchHLE).
-// This also allows items in the crate to have non-snake-case names.
-#![allow(non_snake_case)]
-
 /// Current version. See `build.rs` for how this is generated.
 pub const VERSION: &str = include_str!(concat!(env!("OUT_DIR"), "/version.txt"));
 

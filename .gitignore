@@ -1,5 +1,11 @@
 /target
 /vendor/boost
+/ChronaHLE_sandbox
+/ChronaHLE_apps
+ChronaHLE_log.txt
+ChronaHLE_wallpaper.*
+
+# Legacy local data from builds before the ChronaHLE path migration
 /touchHLE_sandbox
 /touchHLE_apps
 touchHLE_log.txt

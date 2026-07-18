@@ -241,13 +241,18 @@ pub fn open_direct(env: &mut Environment, path: ConstPtr<u8>, flags: i32) -> Fil
             find_or_create_fd(env, host_object)
         }
         Err(error) => {
-            if std::env::var_os("TOUCHHLE_TRACE_OPEN_PATHS").is_some() {
+            if crate::host_env_var_os("TRACE_OPEN_PATHS").is_some() {
                 log!(
                     "open path failed: {:?}, flags {flags:#x}, error {error:?}",
                     path_string
                 );
             }
-            log!("Warning: open({path:?}, {flags:#x}) failed with: {error:?}, returning -1");
+            if matches!(&error, FsError::DoesNotExist) {
+                // Probing optional files is normal, especially for Mono.
+                log_dbg!("open({path:?}, {flags:#x}) failed with: {error:?}, returning -1");
+            } else {
+                log!("Warning: open({path:?}, {flags:#x}) failed with: {error:?}, returning -1");
+            }
             let errno = match error {
                 FsError::AccessDenied => EACCES,
                 FsError::AlreadyExist => EEXIST,

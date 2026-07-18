@@ -3,7 +3,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
-//! touchHLE is a high-level emulator (HLE) for iPhone OS applications.
+//! ChronaHLE is a high-level emulator (HLE) for iPhone OS applications.
 //!
 //! In various places, the terms "guest" and "host" are used to distinguish
 //! between the emulated application (the "guest") and the emulator itself (the
@@ -16,8 +16,7 @@
 //! - A "guest function" is emulated Arm code, usually from the app binary.
 //! - A "host function" is a Rust function that is part of this emulator.
 
-// Allow the crate to have a non-snake-case name (touchHLE).
-// This also allows items in the crate to have non-snake-case names.
+// Apple APIs and preserved compatibility identifiers are not snake case.
 #![allow(non_snake_case)]
 // The documentation for this crate is intended to include private items.
 // rustdoc complains about some public macros that link to private items, but
@@ -60,11 +59,18 @@ use environment::{Environment, MutexId, MutexType, ThreadId, PTHREAD_MUTEX_DEFAU
 
 use std::path::PathBuf;
 
-pub use touchHLE_version::*;
+pub use chronahle_version::*;
 
-/// User-facing product name. Internal crate and resource names intentionally
-/// retain their touchHLE names for compatibility with the upstream layout.
+/// User-facing product name.
 pub const PRODUCT_NAME: &str = "ChronaHLE";
+pub const PRODUCT_WEBSITE: &str = "https://chronahle.xyz/";
+
+/// Read a ChronaHLE developer environment variable, accepting the legacy
+/// prefix so existing profiling and tracing commands keep working.
+pub(crate) fn host_env_var_os(name: &str) -> Option<std::ffi::OsString> {
+    std::env::var_os(format!("CHRONAHLE_{name}"))
+        .or_else(|| std::env::var_os(format!("TOUCHHLE_{name}")))
+}
 
 /// This is the true entry point on Android (SDLActivity calls it after
 /// initialization). On other platforms the true entry point is in src/bin.rs.
@@ -74,22 +80,7 @@ pub extern "C" fn SDL_main(
     _argc: std::ffi::c_int,
     _argv: *const *const std::ffi::c_char,
 ) -> std::ffi::c_int {
-    // Rust's default panic handler prints to stderr, but on Android that just
-    // gets discarded, so we set a custom hook to make debugging easier.
-    std::panic::set_hook(Box::new(|info| {
-        let payload = if let Some(s) = info.payload().downcast_ref::<&str>() {
-            s
-        } else if let Some(s) = info.payload().downcast_ref::<String>() {
-            s
-        } else {
-            "(non-string payload)"
-        };
-        if let Some(location) = info.location() {
-            echo!("Panic at {}: {}", location, payload);
-        } else {
-            echo!("Panic: {}", payload);
-        }
-    }));
+    log::install_panic_hook();
 
     // Empty args: brings up app picker.
     match main([String::new()].into_iter()) {
@@ -119,8 +110,9 @@ Special options:
 ";
 
 pub fn main<T: Iterator<Item = String>>(mut args: T) -> Result<(), String> {
+    log::install_panic_hook();
     echo!(
-        "{} {}{}{} (derived from touchHLE)",
+        "{} {}{}{}",
         PRODUCT_NAME,
         branding(),
         if branding().is_empty() { "" } else { " " },
@@ -361,14 +353,8 @@ pub fn main<T: Iterator<Item = String>>(mut args: T) -> Result<(), String> {
         },
         Err(e) => {
             if options.popup_errors {
-                let error_string = if let Some(s) = e.downcast_ref::<&str>() {
-                    s
-                } else if let Some(s) = e.downcast_ref::<String>() {
-                    s
-                } else {
-                    "(non-string payload)"
-                };
-                window::show_error_messagebox(None, error_string);
+                let error_string = log::take_panic_summary(e.as_ref());
+                window::show_error_messagebox(None, &error_string);
             }
             std::panic::resume_unwind(e)
         }

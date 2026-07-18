@@ -8,6 +8,7 @@
  */
 import org.gradle.nativeplatform.platform.internal.DefaultNativePlatform
 import org.gradle.api.tasks.Sync
+import java.io.File
 
 plugins {
     id("com.android.application") version("8.10.1")
@@ -15,9 +16,9 @@ plugins {
     id("org.jetbrains.kotlin.android") version("2.0.21")
 }
 
-fun runTouchHLEVersionTool(wantBranding: Boolean): String {
+fun runChronaHLEVersionTool(wantBranding: Boolean): String {
     val output = providers.exec {
-        commandLine("cargo", "run", "--package", "touchHLE_version")
+        commandLine("cargo", "run", "--package", "chronahle_version")
         if (wantBranding) {
             args("--", "--branding")
         }
@@ -26,28 +27,38 @@ fun runTouchHLEVersionTool(wantBranding: Boolean): String {
     return output
 }
 
-fun getTouchHLEBranding(): String {
-    return runTouchHLEVersionTool(/* wantBranding: */ true)
+fun getChronaHLEBranding(): String {
+    return runChronaHLEVersionTool(/* wantBranding: */ true)
 }
 
-fun getTouchHLEVersionName(): String {
-    return runTouchHLEVersionTool(/* wantBranding: */ false)
+fun getChronaHLEVersionName(): String {
+    return runChronaHLEVersionTool(/* wantBranding: */ false)
 }
 
 fun join(prefix: String, separator: String, branding: String): String {
     return if (branding.isEmpty()) prefix else prefix + separator + branding
 }
 
+fun androidVersionCode(versionName: String): Int {
+    val parts = versionName.removePrefix("v").substringBefore('-').split('.')
+    require(parts.size == 3) { "ChronaHLE version must use major.minor.patch: $versionName" }
+    val (major, minor, patch) = parts.map(String::toInt)
+    require(major in 0..1999 && minor in 0..999 && patch in 0..999) {
+        "ChronaHLE version is outside Android versionCode bounds: $versionName"
+    }
+    return major * 1_000_000 + minor * 1_000 + patch
+}
+
 val generatedRuntimeAssets = layout.buildDirectory.dir("generated/chronahle/runtime-assets")
-val sdlNdk28CompatHeader = rootDir.parentFile.resolve("android/sdl-ndk28-compat.h").absolutePath
+val sdlNdk28CompatHeader = rootDir.parentFile.resolve("android/sdl-ndk28-compat.h").invariantSeparatorsPath
 val syncRuntimeAssets by tasks.registering(Sync::class) {
     into(generatedRuntimeAssets)
-    from(rootDir.parentFile.resolve("touchHLE_default_options.txt"))
-    from(rootDir.parentFile.resolve("touchHLE_dylibs")) {
-        into("touchHLE_dylibs")
+    from(rootDir.parentFile.resolve("ChronaHLE_default_options.txt"))
+    from(rootDir.parentFile.resolve("ChronaHLE_dylibs")) {
+        into("ChronaHLE_dylibs")
     }
-    from(rootDir.parentFile.resolve("touchHLE_fonts")) {
-        into("touchHLE_fonts")
+    from(rootDir.parentFile.resolve("ChronaHLE_fonts")) {
+        into("ChronaHLE_fonts")
     }
 }
 
@@ -58,7 +69,8 @@ android {
         buildConfig = true
     }
     defaultConfig {
-        val branding = getTouchHLEBranding()
+        val branding = getChronaHLEBranding()
+        val chronaVersionName = getChronaHLEVersionName()
         applicationId = "org.chronahle.android"
         if (!branding.isEmpty()) {
             applicationIdSuffix = branding.lowercase()
@@ -67,8 +79,8 @@ android {
         buildConfigField("String", "APP_NAME", "\"${join("ChronaHLE", " ", branding)}\"")
         manifestPlaceholders["icon"] = "@drawable/icon"
         buildConfigField("int", "APP_ICON", "R.drawable.icon")
-        versionCode = 1
-        versionName = join(getTouchHLEVersionName(), " ", branding)
+        versionCode = androidVersionCode(chronaVersionName)
+        versionName = join(chronaVersionName, " ", branding)
 
         minSdk = 21 // first version with AArch64
         targetSdk = 35
@@ -77,10 +89,10 @@ android {
                 arguments("APP_PLATFORM=android-21")
                 // abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86', 'x86_64'
                 // Only 'arm64-v8a' and 'x86_64' are supported by dynarmic
-                // and hence touchHLE. The 'x86_64' build works, but the main
+                // and hence ChronaHLE. The 'x86_64' build works, but the main
                 // use for that would be the emulator in Android Studio, and
                 // its OpenGL ES implementations don't seem to work properly
-                // with touchHLE, so we disable it to reduce build time and
+                // with ChronaHLE, so we disable it to reduce build time and
                 // avoid shipping stuff we haven't meaningfully tested.
                 // Make sure this matches the cargoNdk targets below.
                 abiFilters("arm64-v8a")
@@ -172,10 +184,13 @@ cargoNdk {
     // Make sure this matches the android abiFilters above.
     targets = arrayListOf("arm64")
     module = ".."
-    librariesNames = arrayListOf("libtouchHLE.so", "libSDL2.so", "libc++_shared.so")
+    librariesNames = arrayListOf("libchronahle.so", "libSDL2.so", "libc++_shared.so")
+    val ndkPath = android.ndkDirectory.invariantSeparatorsPath
     extraCargoEnv = mapOf(
-        "ANDROID_NDK" to android.ndkDirectory.toString(),
-        "ANDROID_NDK_HOME" to android.ndkDirectory.toString(),
+        "ANDROID_NDK" to ndkPath,
+        "ANDROID_NDK_HOME" to ndkPath,
+        "ANDROID_NDK_ROOT" to ndkPath,
+        "NDK_HOME" to ndkPath,
         "CMAKE_EXE_LINKER_FLAGS" to "-Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384",
         "CMAKE_MODULE_LINKER_FLAGS" to "-Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384",
         "CMAKE_SHARED_LINKER_FLAGS" to "-Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384",
@@ -197,6 +212,13 @@ cargoNdk {
         if (!clangXXPath.toFile().exists()) {
             throw GradleException("NDK clang++ compiler not found at expected location: $clangXXPath")
         }
+        val ninjaPath = System.getenv("PATH")
+            .split(File.pathSeparator)
+            .asSequence()
+            .map { File(it, "ninja.exe") }
+            .firstOrNull { it.isFile }
+            ?.invariantSeparatorsPath
+            ?: throw GradleException("Ninja is required for Android native builds but was not found on PATH")
 
         extraCargoEnv.putAll(
             mapOf(
@@ -206,6 +228,7 @@ cargoNdk {
                 // the CC and CXX environment variables. Using Ninja ensures that
                 // the specified compilers are used
                 "CMAKE_GENERATOR" to "Ninja",
+                "CMAKE_MAKE_PROGRAM" to ninjaPath,
             )
         )
     }
@@ -215,7 +238,7 @@ cargoNdk {
         "--lib",
         "--no-default-features",
         "--features",
-        "touchHLE_openal_soft_wrapper/static,sdl2/bundled"
+        "chronahle_openal_soft_wrapper/static,sdl2/bundled"
     )
 }
 

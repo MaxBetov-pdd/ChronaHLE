@@ -33,6 +33,9 @@ pub type blksize_t = u32;
 // enum values sourced from ```man 2 stat```
 pub const S_IFDIR: mode_t = 0o0040000;
 pub const S_IFREG: mode_t = 0o0100000;
+const READ_ONLY_FILE_MODE: mode_t = 0o444;
+const WRITEABLE_FILE_MODE: mode_t = 0o666;
+const DIRECTORY_MODE: mode_t = 0o777;
 
 #[allow(non_camel_case_types)]
 #[derive(Default)]
@@ -103,16 +106,20 @@ fn fstat_inner(env: &mut Environment, fd: FileDescriptor, buf: MutPtr<stat>) -> 
     let mut stat = stat::default();
 
     match file.file {
-        GuestFile::File(_) | GuestFile::IpaBundleFile(_) | GuestFile::ResourceFile(_) => {
-            stat.st_mode |= S_IFREG;
+        GuestFile::File(_) => {
+            stat.st_mode = S_IFREG | WRITEABLE_FILE_MODE;
 
             // TODO: use `std::fs::metadata()` instead
 
             // Obtain file size
             stat.st_size = file.file.stream_len().unwrap().try_into().unwrap();
         }
+        GuestFile::IpaBundleFile(_) | GuestFile::ResourceFile(_) => {
+            stat.st_mode = S_IFREG | READ_ONLY_FILE_MODE;
+            stat.st_size = file.file.stream_len().unwrap().try_into().unwrap();
+        }
         GuestFile::Directory => {
-            stat.st_mode |= S_IFDIR;
+            stat.st_mode = S_IFDIR | DIRECTORY_MODE;
 
             // TODO: st_size
         }

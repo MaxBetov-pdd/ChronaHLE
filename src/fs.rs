@@ -22,7 +22,7 @@
 //! Directories only need a corresponding directory in the host filesystem if
 //! they are writeable (i.e. if new files can be created in them).
 //!
-//! See also [crate::paths], which has paths for host files used by touchHLE.
+//! See also [crate::paths], which has paths for host files used by ChronaHLE.
 
 mod bundle;
 
@@ -45,7 +45,7 @@ enum FileLocation {
     Path(PathBuf),
     /// Reference to a file inside a `.ipa` file (ZIP archive). Read only.
     IpaFileRef(IpaFileRef),
-    /// Name of a resource file bundled with touchHLE. Read only.
+    /// Name of a resource file bundled with ChronaHLE. Read only.
     ResourceFilePath(String),
 }
 
@@ -182,7 +182,7 @@ impl GuestPath {
     /// would have to implement it for everything that can derference to `&str`.
     /// It's easier to just use `&str`.
     ///
-    /// Warning! This function should only be used for internal touchHLE
+    /// Warning! This function should only be used for internal ChronaHLE
     /// purposes.
     /// For Foundation case, use `[NSString stringByAppendingPathComponent:]`
     pub fn join<P: AsRef<str>>(&self, path: P) -> GuestPathBuf {
@@ -369,7 +369,7 @@ fn handle_open_err<T, E: std::fmt::Display, P: std::fmt::Debug>(
 ) -> T {
     match open_result {
         Ok(ok) => ok,
-        Err(e) => panic!("Unexpected I/O failure when trying to access real path {host_path:?}: {e}. This might indicate that files needed by touchHLE are missing, or were moved while it was running."),
+        Err(e) => panic!("Unexpected I/O failure when trying to access real path {host_path:?}: {e}. This might indicate that files needed by ChronaHLE are missing, or were moved while it was running."),
     }
 }
 
@@ -630,7 +630,7 @@ impl Fs {
             }
         }
 
-        // Some Free Software libraries are bundled with touchHLE.
+        // Some Free Software libraries are bundled with ChronaHLE.
         use paths::DYLIBS_DIR;
         let usr_lib = FsNode::dir()
             .with_child(

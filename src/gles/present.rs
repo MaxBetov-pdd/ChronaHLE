@@ -42,7 +42,7 @@ impl FpsCounter {
             let max_ms = self.frame_times.last().unwrap().as_secs_f64() * 1000.0;
             self.time = now;
             echo!(
-                "touchHLE: {} FPS: {:.2}, frame time p95: {:.1} ms, max: {:.1} ms",
+                "ChronaHLE: {} FPS: {:.2}, frame time p95: {:.1} ms, max: {:.1} ms",
                 label,
                 std::mem::take(&mut self.frames) as f32 / duration.as_secs_f32(),
                 p95_ms,

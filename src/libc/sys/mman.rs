@@ -11,7 +11,7 @@ use crate::export_c_func;
 use crate::libc::errno::{set_errno, EINVAL, ENOTSUP};
 use crate::libc::posix_io;
 use crate::libc::posix_io::{off_t, FileDescriptor, SEEK_SET};
-use crate::mem::{ConstPtr, GuestUSize, MutVoidPtr, PAGE_SIZE_ALIGN_MASK};
+use crate::mem::{ConstPtr, GuestUSize, MutVoidPtr, Ptr, PAGE_SIZE_ALIGN_MASK};
 use std::collections::HashMap;
 
 #[allow(dead_code)]
@@ -21,8 +21,48 @@ const MAP_ANON: i32 = 0x1000;
 
 #[derive(Default)]
 pub struct State {
-    /// Keeping track of `mmap` allocations
+    /// Page-aligned ranges currently owned by `mmap`.
     mmap_allocations: HashMap<MutVoidPtr, GuestUSize>,
+}
+
+impl State {
+    fn untrack_range(&mut self, addr: MutVoidPtr, len: GuestUSize) {
+        let remove_start = u64::from(addr.to_bits());
+        let remove_end = remove_start + u64::from(len);
+        let allocations: Vec<_> = self
+            .mmap_allocations
+            .iter()
+            .map(|(&base, &size)| (base, size))
+            .collect();
+
+        for (base, size) in allocations {
+            let allocation_start = u64::from(base.to_bits());
+            let allocation_end = allocation_start + u64::from(size);
+            if allocation_start >= remove_end || remove_start >= allocation_end {
+                continue;
+            }
+
+            self.mmap_allocations.remove(&base).unwrap();
+            if allocation_start < remove_start {
+                self.mmap_allocations.insert(
+                    base,
+                    GuestUSize::try_from(remove_start - allocation_start).unwrap(),
+                );
+            }
+            if remove_end < allocation_end {
+                self.mmap_allocations.insert(
+                    Ptr::from_bits(GuestUSize::try_from(remove_end).unwrap()),
+                    GuestUSize::try_from(allocation_end - remove_end).unwrap(),
+                );
+            }
+        }
+    }
+}
+
+fn page_aligned_len(len: GuestUSize) -> Option<GuestUSize> {
+    len.checked_add(PAGE_SIZE_ALIGN_MASK)
+        .map(|len| len & !PAGE_SIZE_ALIGN_MASK)
+        .filter(|&len| len != 0)
 }
 
 /// For files, our implementation of mmap is really simple:
@@ -49,19 +89,34 @@ fn mmap(
         offset
     );
 
+    let Some(allocation_len) = page_aligned_len(len) else {
+        set_errno(env, EINVAL);
+        return Ptr::from_bits(GuestUSize::MAX);
+    };
+    if flags & MAP_FIXED != 0 && addr.to_bits() & PAGE_SIZE_ALIGN_MASK != 0 {
+        set_errno(env, EINVAL);
+        return Ptr::from_bits(GuestUSize::MAX);
+    }
+
     assert_eq!(offset, 0);
     let ptr = if addr.is_null() {
-        env.mem.vm_alloc(None, len).unwrap()
+        env.mem.vm_alloc(None, allocation_len).unwrap()
+    } else if flags & MAP_FIXED != 0 {
+        env.libc_state.mman.untrack_range(addr, allocation_len);
+        env.mem.vm_free(addr, allocation_len);
+        env.mem
+            .vm_alloc(Some(addr.to_bits()), allocation_len)
+            .unwrap()
     } else {
-        match env.mem.vm_alloc(Some(addr.to_bits()), len) {
-            Err(err) if flags & MAP_FIXED == 0 => {
-                let ptr = env.mem.vm_alloc(None, len).unwrap();
+        match env.mem.vm_alloc(Some(addr.to_bits()), allocation_len) {
+            Err(err) => {
+                let ptr = env.mem.vm_alloc(None, allocation_len).unwrap();
                 log!(
                     "Warning: mmap could not allocate at hint {addr:?} ({err:?}), allocated at {ptr:?}",
                 );
                 ptr
             }
-            result => result.unwrap(),
+            Ok(ptr) => ptr,
         }
     };
 
@@ -78,7 +133,10 @@ fn mmap(
     };
 
     assert!(!env.libc_state.mman.mmap_allocations.contains_key(&ptr));
-    env.libc_state.mman.mmap_allocations.insert(ptr, len);
+    env.libc_state
+        .mman
+        .mmap_allocations
+        .insert(ptr, allocation_len);
 
     ptr
 }
@@ -89,18 +147,18 @@ fn munmap(env: &mut Environment, addr: MutVoidPtr, len: GuestUSize) -> i32 {
 
     log_dbg!("munmap({:?}, {})", addr, len);
 
-    if len == 0 {
+    let Some(allocation_len) = page_aligned_len(len) else {
         set_errno(env, EINVAL);
-        // TODO: should we clear allocations for `addr` here too?
         log!("Warning: munmap({:?}, {}) failed, returning -1", addr, len);
         return -1;
+    };
+    if addr.to_bits() & PAGE_SIZE_ALIGN_MASK != 0 {
+        set_errno(env, EINVAL);
+        return -1;
     }
-    assert_eq!(
-        *env.libc_state.mman.mmap_allocations.get(&addr).unwrap(),
-        len
-    );
-    env.mem.vm_free(addr, len);
-    env.libc_state.mman.mmap_allocations.remove(&addr);
+
+    env.libc_state.mman.untrack_range(addr, allocation_len);
+    env.mem.vm_free(addr, allocation_len);
     0 // success
 }
 
@@ -133,3 +191,39 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(shm_open(_, _, _)),
     export_c_func!(mprotect(_, _, _)),
 ];
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn untrack_range_splits_an_existing_mapping() {
+        let mut state = State::default();
+        state
+            .mmap_allocations
+            .insert(Ptr::from_bits(0x1000), 0x5000);
+
+        state.untrack_range(Ptr::from_bits(0x2000), 0x2000);
+
+        assert_eq!(state.mmap_allocations.len(), 2);
+        assert_eq!(state.mmap_allocations[&Ptr::from_bits(0x1000)], 0x1000);
+        assert_eq!(state.mmap_allocations[&Ptr::from_bits(0x4000)], 0x2000);
+    }
+
+    #[test]
+    fn untrack_range_handles_multiple_mappings() {
+        let mut state = State::default();
+        state
+            .mmap_allocations
+            .insert(Ptr::from_bits(0x1000), 0x2000);
+        state
+            .mmap_allocations
+            .insert(Ptr::from_bits(0x4000), 0x3000);
+
+        state.untrack_range(Ptr::from_bits(0x2000), 0x4000);
+
+        assert_eq!(state.mmap_allocations.len(), 2);
+        assert_eq!(state.mmap_allocations[&Ptr::from_bits(0x1000)], 0x1000);
+        assert_eq!(state.mmap_allocations[&Ptr::from_bits(0x6000)], 0x1000);
+    }
+}

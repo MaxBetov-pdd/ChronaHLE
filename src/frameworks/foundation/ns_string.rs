@@ -832,7 +832,9 @@ pub const CLASSES: ClassExports = objc_classes! {
     let total_size: GuestUSize = bytes_size + null_size;
     let c_string: MutPtr<u8> = env.mem.alloc(total_size).cast();
     _ = env.mem.bytes_at_mut(c_string, bytes_size).write(&bytes).unwrap();
-    assert_eq!(env.mem.read(c_string + total_size - 1), b'\0');
+    env.mem
+        .bytes_at_mut(c_string + bytes_size, null_size)
+        .fill(0);
     // NSData will handle releasing the string (it is autoreleased)
     let _: id = msg_class![env; NSData dataWithBytesNoCopy:(c_string.cast_void())
                                                     length:total_size];

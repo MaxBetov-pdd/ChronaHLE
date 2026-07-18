@@ -42,10 +42,11 @@ fn main() {
                 .or_else(|_| env::var("ANDROID_NDK_ROOT"))
                 .or_else(|_| env::var("NDK_HOME"))
                 .expect("Android NDK path was not set");
-            build.define(
-                "CMAKE_TOOLCHAIN_FILE",
-                Path::new(&ndk_root).join("build/cmake/android.toolchain.cmake"),
-            );
+            let toolchain_file = Path::new(&ndk_root)
+                .join("build/cmake/android.toolchain.cmake")
+                .to_string_lossy()
+                .replace('\\', "/");
+            build.define("CMAKE_TOOLCHAIN_FILE", toolchain_file);
             build.define("ANDROID_ABI", "arm64-v8a");
             build.define("ANDROID_PLATFORM", "android-21");
         }

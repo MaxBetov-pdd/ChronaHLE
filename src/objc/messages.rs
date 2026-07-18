@@ -304,7 +304,7 @@ Type mismatch when sending message {} to {:?}!
             let selector_name = selector.as_str(&env.mem);
             if is_metaclass && name == "Flurry" && selector_name == "getFlurryAgentVersion" {
                 let version =
-                    crate::frameworks::foundation::ns_string::get_static_str(env, "touchHLE");
+                    crate::frameworks::foundation::ns_string::get_static_str(env, "ChronaHLE");
                 env.cpu.regs_mut()[0] = version.to_bits();
                 return;
             }

@@ -141,7 +141,7 @@ fn unlink(env: &mut Environment, path: ConstPtr<u8>) -> i32 {
 
 fn gethostname(env: &mut Environment, name: MutPtr<u8>, namelen: GuestUSize) -> i32 {
     // TODO: define unique hostname once networking is supported
-    let hostname = "touchHLE";
+    let hostname = "ChronaHLE";
     let len: GuestUSize = hostname.len().try_into().unwrap();
     // TODO: check against HOST_NAME_MAX
     assert!(namelen > len);

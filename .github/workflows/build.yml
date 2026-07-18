@@ -1,4 +1,4 @@
-name: Build ChronaHLE
+name: ChronaHLE CI and Release
 
 on:
   push:
@@ -10,6 +10,10 @@ on:
 
 permissions:
   contents: read
+
+concurrency:
+  group: chronahle-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
 
 env:
   CARGO_TERM_COLOR: always
@@ -72,24 +76,31 @@ jobs:
         run: cargo test --release --lib
 
       - name: Release build
-        run: cargo build --release --bin touchHLE
+        run: cargo build --release --bin ChronaHLE
 
       - name: Package desktop artifact
         shell: bash
         run: |
           mkdir -p artifacts/ChronaHLE
           if [ "$RUNNER_OS" = "Windows" ]; then
-            cp target/release/touchHLE.exe artifacts/ChronaHLE/ChronaHLE.exe
+            cp target/release/ChronaHLE.exe artifacts/ChronaHLE/ChronaHLE.exe
           else
-            cp target/release/touchHLE artifacts/ChronaHLE/ChronaHLE
+            cp target/release/ChronaHLE artifacts/ChronaHLE/ChronaHLE
+            chmod +x artifacts/ChronaHLE/ChronaHLE
           fi
-          cp -R touchHLE_dylibs touchHLE_fonts artifacts/ChronaHLE/
-          cp touchHLE_default_options.txt LICENSE FORK_NOTICE.md artifacts/ChronaHLE/
+          cp -R ChronaHLE_dylibs ChronaHLE_fonts artifacts/ChronaHLE/
+          cp ChronaHLE_default_options.txt LICENSE FORK_NOTICE.md README.md artifacts/ChronaHLE/
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            (cd artifacts && 7z a "${{ matrix.artifact }}.zip" ChronaHLE)
+          else
+            tar -C artifacts -czf "artifacts/${{ matrix.artifact }}.tar.gz" ChronaHLE
+          fi
 
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
-          path: artifacts/ChronaHLE
+          path: artifacts/${{ matrix.artifact }}.*
+          if-no-files-found: error
 
   android:
     runs-on: ubuntu-24.04
@@ -157,10 +168,15 @@ jobs:
             "$ANDROID_HOME/ndk/28.0.13004108/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf" -lW "$library" | awk '/LOAD/ { if ($NF != "0x4000" && $NF != "0x10000") exit 1 }'
           done
 
+      - name: Name Android artifact
+        run: |
+          mkdir -p artifacts
+          cp android/app/build/outputs/apk/release/app-release.apk artifacts/ChronaHLE-Android-arm64.apk
+
       - uses: actions/upload-artifact@v4
         with:
           name: ChronaHLE-Android-arm64
-          path: android/app/build/outputs/apk/release/app-release.apk
+          path: artifacts/ChronaHLE-Android-arm64.apk
 
   publish:
     if: startsWith(github.ref, 'refs/tags/')
@@ -175,11 +191,16 @@ jobs:
           path: release-artifacts
       - name: Create release archives
         run: |
-          cd release-artifacts
-          for directory in ChronaHLE-*; do
-            if [ -d "$directory" ]; then zip -r "$directory.zip" "$directory"; fi
-          done
+          mkdir -p dist
+          cp release-artifacts/ChronaHLE-Windows-x86_64/ChronaHLE-Windows-x86_64.zip dist/
+          cp release-artifacts/ChronaHLE-Linux-x86_64/ChronaHLE-Linux-x86_64.tar.gz dist/
+          cp release-artifacts/ChronaHLE-Android-arm64/ChronaHLE-Android-arm64.apk dist/
+          (cd dist && sha256sum ChronaHLE-* > SHA256SUMS.txt)
       - uses: softprops/action-gh-release@v2
         with:
-          files: release-artifacts/*.zip
+          files: |
+            dist/ChronaHLE-Windows-x86_64.zip
+            dist/ChronaHLE-Linux-x86_64.tar.gz
+            dist/ChronaHLE-Android-arm64.apk
+            dist/SHA256SUMS.txt
           generate_release_notes: true

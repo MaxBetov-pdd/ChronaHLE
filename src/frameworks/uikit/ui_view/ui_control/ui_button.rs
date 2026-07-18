@@ -308,7 +308,7 @@ pub const CLASSES: ClassExports = objc_classes! {
     let host_obj = env.objc.borrow::<UIButtonHostObject>(this);
     host_obj.titles_for_states.get(&state).or_else(|| {
         host_obj.titles_for_states.get(&UIControlStateNormal)
-    }).copied().unwrap()
+    }).copied().unwrap_or(nil)
 }
 - (())setTitle:(id)title // NSString*
       forState:(UIControlState)state {
@@ -328,7 +328,7 @@ pub const CLASSES: ClassExports = objc_classes! {
     let host_obj = env.objc.borrow::<UIButtonHostObject>(this);
     host_obj.background_images_for_states.get(&state).or_else(|| {
         host_obj.background_images_for_states.get(&UIControlStateNormal)
-    }).copied().unwrap()
+    }).copied().unwrap_or(nil)
 }
 - (())setBackgroundImage:(id)image forState:(UIControlState)state {
     retain(env,image);
@@ -347,7 +347,7 @@ pub const CLASSES: ClassExports = objc_classes! {
     let host_obj = env.objc.borrow::<UIButtonHostObject>(this);
     host_obj.title_colors_for_states.get(&state).or_else(|| {
         host_obj.title_colors_for_states.get(&UIControlStateNormal)
-    }).copied().unwrap()
+    }).copied().unwrap_or(nil)
 }
 - (())setTitleColor:(id)color // UIColor*
       forState:(UIControlState)state {
@@ -367,7 +367,7 @@ pub const CLASSES: ClassExports = objc_classes! {
     let host_obj = env.objc.borrow::<UIButtonHostObject>(this);
     host_obj.images_for_states.get(&state).or_else(|| {
         host_obj.images_for_states.get(&UIControlStateNormal)
-    }).copied().unwrap()
+    }).copied().unwrap_or(nil)
 }
 - (())setImage:(id)image // UIImage*
       forState:(UIControlState)state {

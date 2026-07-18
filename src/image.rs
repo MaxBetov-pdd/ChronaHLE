@@ -19,8 +19,8 @@
 
 use std::ffi::{c_int, c_uchar, CStr};
 
-use touchHLE_pvrt_decompress_wrapper::*;
-use touchHLE_stb_image_wrapper::*;
+use chronahle_pvrt_decompress_wrapper::*;
+use chronahle_stb_image_wrapper::*;
 
 pub struct Image {
     pixels: PixelStore,

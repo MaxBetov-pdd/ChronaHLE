@@ -24,6 +24,7 @@ use crate::Environment;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
+use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
 // These are used by the EAGLDrawable protocol implemented by CAEAGLayer.
@@ -59,6 +60,23 @@ const kEAGLRenderingAPIOpenGLES1: EAGLRenderingAPI = 1;
 const kEAGLRenderingAPIOpenGLES2: EAGLRenderingAPI = 2;
 #[allow(dead_code)]
 const kEAGLRenderingAPIOpenGLES3: EAGLRenderingAPI = 3;
+
+fn profile_stalls() -> bool {
+    static PROFILE_STALLS: OnceLock<bool> = OnceLock::new();
+    *PROFILE_STALLS.get_or_init(|| crate::host_env_var_os("PROFILE_STALLS").is_some())
+}
+
+fn log_slow_present_phase(started: Instant, phase: &str) -> Instant {
+    let now = Instant::now();
+    let elapsed = now.saturating_duration_since(started);
+    if elapsed >= Duration::from_millis(10) {
+        log!(
+            "Slow present phase {phase}: {:.1} ms",
+            elapsed.as_secs_f64() * 1000.0
+        );
+    }
+    now
+}
 
 pub(super) struct EAGLContextHostObject {
     pub(super) gles_ctx: Option<Box<dyn GLESContext>>,
@@ -645,6 +663,8 @@ unsafe fn read_renderbuffer(gles: &mut dyn GLES, mut pixel_buffer: Vec<u8>) -> (
 /// [present_frame], trying to avoid noticeably modifying OpenGL ES state while
 /// doing so. The front and back buffers are then swapped.
 unsafe fn present_renderbuffer(env: &mut Environment, context: id) {
+    let profile = profile_stalls();
+    let present_started = profile.then(Instant::now);
     let use_native_gles2 = cfg!(target_os = "android")
         && env
             .objc
@@ -666,6 +686,9 @@ unsafe fn present_renderbuffer(env: &mut Environment, context: id) {
             .as_mut()
             .unwrap()
             .present_rgba_pixels(&pixels, width, height);
+        if let Some(started) = present_started {
+            log_slow_present_phase(started, "native GLES2 readback and upload");
+        }
         return;
     }
 
@@ -743,7 +766,11 @@ unsafe fn present_renderbuffer(env: &mut Environment, context: id) {
         resources.width = width;
         resources.height = height;
     }
+    let mut phase_started = profile.then(Instant::now);
     gles.CopyTexSubImage2D(gles11::TEXTURE_2D, 0, 0, 0, 0, 0, width, height);
+    if let Some(started) = phase_started {
+        phase_started = Some(log_slow_present_phase(started, "CopyTexSubImage2D"));
+    }
 
     // Draw to the window's default framebuffer.
     gles.BindFramebufferOES(gles11::FRAMEBUFFER_OES, 0);
@@ -814,6 +841,12 @@ unsafe fn present_renderbuffer(env: &mut Environment, context: id) {
 
     // Draw the quad
     present_frame(gles, viewport, rotation_matrix, virtual_cursor_visible_at);
+    if let Some(started) = phase_started {
+        phase_started = Some(log_slow_present_phase(
+            started,
+            "composition draw and state setup",
+        ));
+    }
 
     // Restore all the state saved before rendering
     for (&is_enabled, info) in old_arrays.iter().zip(gles1_on_gl2::ARRAYS.iter()) {
@@ -882,6 +915,9 @@ unsafe fn present_renderbuffer(env: &mut Environment, context: id) {
     // SDL2's documentation warns 0 should be bound to the draw framebuffer
     // when swapping the window, so this is the perfect moment.
     env.window.as_ref().unwrap().swap_window();
+    if let Some(started) = phase_started {
+        log_slow_present_phase(started, "swap_window");
+    }
 
     let mut gles_boxed = gles_ctx.make_current(env.window.as_mut().unwrap());
     let gles = gles_boxed.as_mut();
@@ -894,6 +930,16 @@ unsafe fn present_renderbuffer(env: &mut Environment, context: id) {
     env.objc
         .borrow_mut::<EAGLContextHostObject>(context)
         .presentation_resources = Some(resources);
+
+    if let Some(started) = present_started {
+        let elapsed = started.elapsed();
+        if elapsed >= Duration::from_millis(20) {
+            log!(
+                "Slow present_renderbuffer total: {:.1} ms",
+                elapsed.as_secs_f64() * 1000.0
+            );
+        }
+    }
 
     // { let err = gles.GetError(); if err != 0 { panic!("{:#x}", err); } }
 }

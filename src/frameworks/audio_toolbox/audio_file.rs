@@ -85,7 +85,7 @@ const kAudioFilePropertyEstimatedDuration: AudioFilePropertyID = fourcc(b"edur")
 const kAudioFilePropertyPacketTableInfo: AudioFilePropertyID = fourcc(b"pnfo");
 
 fn trace_audio_files() -> bool {
-    std::env::var_os("TOUCHHLE_TRACE_AUDIOQUEUES").is_some()
+    crate::host_env_var_os("TRACE_AUDIOQUEUES").is_some()
 }
 
 pub fn AudioFileOpenURL(

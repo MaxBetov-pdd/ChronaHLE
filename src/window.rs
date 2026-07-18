@@ -151,10 +151,10 @@ pub enum TextInputEvent {
 pub enum Event {
     /// User requested quit.
     Quit,
-    /// OS has informed touchHLE it will soon become inactive.
+    /// OS has informed ChronaHLE it will soon become inactive.
     /// (iOS `applicationWillResignActive:`, Android `onPause()`)
     AppWillResignActive,
-    /// OS has informed touchHLE it will soon terminate.
+    /// OS has informed ChronaHLE it will soon terminate.
     /// (iOS `applicationWillTerminate:`, Android `onDestroy()`)
     AppWillTerminate,
     TouchesDown(HashMap<FingerId, Coords>),
@@ -261,7 +261,7 @@ pub struct Window {
 }
 
 impl Window {
-    /// Returns [true] if touchHLE is running on a device where we should always
+    /// Returns [true] if ChronaHLE is running on a device where we should always
     /// display fullscreen, but SDL2 will let us control the orientation, i.e.
     /// Android devices.
     pub fn rotatable_fullscreen() -> bool {
@@ -431,7 +431,7 @@ impl Window {
     }
 
     /// Poll for events from the OS. This needs to be done reasonably often
-    /// (60Hz is probably fine) so that the host OS doesn't consider touchHLE
+    /// (60Hz is probably fine) so that the host OS doesn't consider ChronaHLE
     /// to be unresponsive. Note that events are not returned by this function,
     /// since we often need to defer actually handling them.
     ///
@@ -731,7 +731,7 @@ impl Window {
                     // For some reason, if we don't pause event polling, we will
                     // never finish handling the event.
                     // TODO: Add a mechanism for re-enabling polling, if at some
-                    // point we support returning touchHLE to the foreground.
+                    // point we support returning ChronaHLE to the foreground.
                     self.enable_event_polling = false;
                     continue;
                 }
@@ -831,7 +831,7 @@ impl Window {
                     keycode: Some(sdl2::keyboard::Keycode::F12),
                     ..
                 } => {
-                    // Log this so you can tell when touchHLE has received
+                    // Log this so you can tell when ChronaHLE has received
                     // the event but it's stuck in the queue.
                     echo!("F12 pressed, EnterDebugger event queued.");
                     Event::EnterDebugger
@@ -1535,6 +1535,49 @@ impl Window {
 
 pub fn open_url(env: &mut Environment, url: &str) -> Result<(), String> {
     env.on_parent_stack_in_coroutine(|_, _| sdl2::url::open_url(url).map_err(|e| e.to_string()))
+}
+
+/// Present a UIKit alert through the host's native message box implementation.
+pub fn show_alert_messagebox(
+    env: &mut Environment,
+    title: &str,
+    message: &str,
+    button_titles: &[String],
+) -> Option<i32> {
+    let title = title.to_string();
+    let message = message.to_string();
+    let mut button_titles = button_titles.to_vec();
+    if button_titles.is_empty() {
+        button_titles.push("OK".to_string());
+    }
+
+    env.on_parent_stack_in_coroutine(move |window, _| {
+        use sdl2::messagebox;
+        let buttons = button_titles
+            .iter()
+            .enumerate()
+            .map(|(index, text)| messagebox::ButtonData {
+                flags: messagebox::MessageBoxButtonFlag::NOTHING,
+                button_id: i32::try_from(index).unwrap(),
+                text,
+            })
+            .collect::<Vec<_>>();
+        match messagebox::show_message_box(
+            messagebox::MessageBoxFlag::INFORMATION,
+            &buttons,
+            &title,
+            &message,
+            Some(&window.window),
+            None,
+        ) {
+            Ok(messagebox::ClickedButton::CustomButton(button)) => Some(button.button_id),
+            Ok(messagebox::ClickedButton::CloseButton) => None,
+            Err(error) => {
+                log!("Warning: Failed to show UIAlertView host message box: {error}");
+                None
+            }
+        }
+    })
 }
 
 /// Show an SDL messagebox for an error (typically after a panic).

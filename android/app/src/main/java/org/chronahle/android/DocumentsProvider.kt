@@ -27,7 +27,6 @@ import java.io.*
 class DocumentsProvider : DocumentsProvider() {
     //private val baseDirectory = File(SkylineApplication.instance.getPublicFilesDir().canonicalPath)
     //private val baseDirectory = Environment.getExternalStorageDirectory()
-   // private val baseDirectory = touchHLEApplication.getContext().getExternalFilesDir(null)!!
     //private val applicationName = SkylineApplication.instance.applicationInfo.loadLabel(SkylineApplication.instance.packageManager).toString()
     private val applicationName = BuildConfig.APP_NAME
 

@@ -124,19 +124,19 @@ const PVRTD_LICENSE: &str = include_str!(concat!(
     "/vendor/PVRTDecompress/LICENSE.md"
 ));
 
-// When resource files are bundled with touchHLE in such a way that the user can
+// When resource files are bundled with ChronaHLE in such a way that the user can
 // read their license files directly, use this caveat.
 
 const EXTERNAL_FILES_CAVEAT: &str = "
 The following authorship, copyright and license information relates to this
 ChronaHLE executable. Please note that different licensing terms apply to source
-files and to the bundled dynamic libraries (in touchHLE_dylibs/) and fonts (in
-touchHLE_fonts/). Please consult the respective files/directories for more
+files and to the bundled dynamic libraries (in ChronaHLE_dylibs/) and fonts (in
+ChronaHLE_fonts/). Please consult the respective files/directories for more
 information.
 ";
 
-// When resource files are bundled with touchHLE in such a way that only
-// touchHLE can read the license file, use these notices.
+// When resource files are bundled with ChronaHLE in such a way that only
+// ChronaHLE can read the license file, use these notices.
 
 // Apple is mentioned because the GPLv2 allows repeating the original source
 // code offer when non-commercially redistributing binaries.

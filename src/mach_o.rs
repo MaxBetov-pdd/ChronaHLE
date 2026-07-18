@@ -533,7 +533,7 @@ impl MachO {
                     }
                 }
                 LoadCommand::EncryptionInfo { id, .. } if id != 0 => {
-                    return Err("The executable is encrypted. touchHLE can't run encrypted apps!");
+                    return Err("The executable is encrypted. ChronaHLE can't run encrypted apps!");
                 }
                 LoadCommand::LoadDyLib(DyLib { name, .. }) => {
                     dynamic_libraries.push(String::from(&*name));

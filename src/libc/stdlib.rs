@@ -34,7 +34,7 @@ fn malloc(env: &mut Environment, size: GuestUSize) -> MutVoidPtr {
     // TODO: handle errno properly
     set_errno(env, 0);
 
-    env.mem.alloc(size)
+    env.mem.alloc_uninitialized(size)
 }
 
 fn malloc_size(env: &mut Environment, ptr: ConstVoidPtr) -> GuestUSize {
@@ -260,8 +260,10 @@ fn div(_env: &mut Environment, numer: i32, denom: i32) -> div_t {
 fn getenv(env: &mut Environment, name: ConstPtr<u8>) -> MutPtr<u8> {
     let name_cstr = env.mem.cstr_at(name);
     let Some(&value) = env.env_vars.get(name_cstr) else {
-        log!(
-            "Warning: getenv() for {:?} ({:?}) unhandled",
+        // POSIX defines an unset variable as a normal NULL result. Mono probes
+        // optional variables frequently, so this must not flood release logs.
+        log_dbg!(
+            "getenv() for {:?} ({:?}) is unset",
             name,
             std::str::from_utf8(name_cstr)
         );

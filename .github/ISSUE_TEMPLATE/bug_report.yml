@@ -1,0 +1,54 @@
+name: Emulator bug
+description: Report a reproducible ChronaHLE crash or incorrect behavior.
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Do not upload IPA files, extracted commercial assets or private save data.
+  - type: input
+    id: version
+    attributes:
+      label: ChronaHLE version
+      description: Release tag or full commit ID.
+    validations:
+      required: true
+  - type: dropdown
+    id: host
+    attributes:
+      label: Host platform
+      options:
+        - Windows x86_64
+        - Linux x86_64
+        - Android ARM64
+    validations:
+      required: true
+  - type: input
+    id: hardware
+    attributes:
+      label: Hardware
+      description: CPU or phone model and GPU.
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: What happened?
+      description: Include the exact steps, expected result and actual result.
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: Relevant log excerpt
+      description: Attach the smallest useful ChronaHLE log after removing private data.
+      render: text
+  - type: checkboxes
+    id: legal
+    attributes:
+      label: Checklist
+      options:
+        - label: I used a decrypted application copy I am legally entitled to use.
+          required: true
+        - label: I did not attach copyrighted application files or assets.
+          required: true

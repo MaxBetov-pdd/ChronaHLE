@@ -37,6 +37,8 @@ use nullable_box::NullableBox;
 /// Index into the [Vec] of threads. Thread 0 is always the main thread.
 pub type ThreadId = usize;
 
+const CPU_TIMESLICE_TICKS: u64 = 25_000;
+
 pub type HostContext = Coroutine<Environment, Environment, Environment>;
 
 /// Bookkeeping for a thread.
@@ -374,23 +376,6 @@ impl Environment {
 
         let mut mem = mem::Mem::new();
 
-        let is_spore = bundle.bundle_identifier().starts_with("com.ea.spore");
-        let is_critter_crunch = bundle
-            .bundle_identifier()
-            .starts_with("com.capybaragames.CritterCrunch")
-            || bundle
-                .bundle_identifier()
-                .starts_with("com.go.starwave.CritterCrunch");
-        // We always reset this flag depending on which game is launched.
-        mem.zero_memory_on_free = !is_spore && !is_critter_crunch;
-        if is_spore {
-            log!("Applying game-specific hack for Spore Origins: zeroing memory on alloc instead of free.");
-        }
-        if is_critter_crunch {
-            // Without this hack, every time a critter 'explodes',
-            // the game crashes with a null page access error.
-            log!("Applying game-specific hack for Critter Crunch: zeroing memory on alloc instead of free.");
-        }
         let executable = mach_o::MachO::load_from_file(
             bundle.executable_path(),
             &fs,
@@ -410,7 +395,7 @@ impl Environment {
                 continue;
             }
 
-            // There are some Free Software libraries bundled with touchHLE and
+            // There are some Free Software libraries bundled with ChronaHLE and
             // exposed via the guest file system (see Fs::new()).
             let dylib_path = fs::GuestPath::new(&dylib);
             if fs.is_file(dylib_path) {
@@ -889,19 +874,19 @@ impl Environment {
         }
     }
 
-    /// Get a shared reference to the window. Panics if touchHLE is running in
+    /// Get a shared reference to the window. Panics if ChronaHLE is running in
     /// headless mode.
     pub fn window(&self) -> &window::Window {
         self.window.as_ref().expect(
-            "Tried to do something that needs a window, but touchHLE is running in headless mode!",
+            "Tried to do something that needs a window, but ChronaHLE is running in headless mode!",
         )
     }
 
-    /// Get a mutable reference to the window. Panics if touchHLE is running
+    /// Get a mutable reference to the window. Panics if ChronaHLE is running
     /// in headless mode.
     pub fn window_mut(&mut self) -> &mut window::Window {
         self.window.as_mut().expect(
-            "Tried to do something that needs a window, but touchHLE is running in headless mode!",
+            "Tried to do something that needs a window, but ChronaHLE is running in headless mode!",
         )
     }
 
@@ -1329,11 +1314,12 @@ impl Environment {
             if stepping {
                 self.remaining_ticks = None;
             } else {
-                // 100,000 ticks is an arbitrary number. It needs to be
-                // reasonably large so we aren't jumping in and out of dynarmic
-                // or trying to poll for events too often. At the same time,
-                // very large values are bad for responsiveness.
-                self.remaining_ticks = Some(100_000);
+                // Guest threads are cooperative on the host. A large quantum
+                // lets Unity loading workers monopolize the emulator for
+                // hundreds of milliseconds, starving rendering and audio.
+                // 25,000 ticks keeps native transitions infrequent while
+                // bounding latency during CPU-heavy loading.
+                self.remaining_ticks = Some(CPU_TIMESLICE_TICKS);
             }
             let mut kill_current_thread = false;
 
@@ -1365,14 +1351,8 @@ impl Environment {
                     env.stack_trace_all();
 
                     if env.options.popup_errors {
-                        let error_string = if let Some(s) = e.downcast_ref::<&str>() {
-                            s
-                        } else if let Some(s) = e.downcast_ref::<String>() {
-                            s
-                        } else {
-                            "(non-string payload)"
-                        };
-                        window::show_error_messagebox(env.window.as_deref(), error_string);
+                        let error_string = crate::log::take_panic_summary(e.as_ref());
+                        window::show_error_messagebox(env.window.as_deref(), &error_string);
                     }
                     // Put the host context back before resuming, the env will
                     // clean it up on drop.
@@ -1482,14 +1462,8 @@ impl Environment {
                         window.on_main_stack = true;
                     };
                     if self.options.popup_errors {
-                        let error_string = if let Some(s) = e.downcast_ref::<&str>() {
-                            s
-                        } else if let Some(s) = e.downcast_ref::<String>() {
-                            s
-                        } else {
-                            "(non-string payload)"
-                        };
-                        window::show_error_messagebox(self.window.as_deref(), error_string);
+                        let error_string = crate::log::take_panic_summary(e.as_ref());
+                        window::show_error_messagebox(self.window.as_deref(), &error_string);
                     }
                     echo!("Register state immediately after panic:");
                     self.dump_all_regs();
@@ -1689,7 +1663,7 @@ impl Environment {
                     break;
                 }
             }
-            if std::env::var_os("TOUCHHLE_PUMP_RUNLOOP_AUDIOQUEUES").is_some() {
+            if crate::host_env_var_os("PUMP_RUNLOOP_AUDIOQUEUES").is_some() {
                 frameworks::foundation::ns_run_loop::pump_main_run_loop_audio_queue_sources(self);
             }
             self.yield_thread(ThreadBlock::NotBlocked);

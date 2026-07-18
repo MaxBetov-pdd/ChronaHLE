@@ -39,8 +39,8 @@ GitHub Actions performs this step automatically. Do not reset a patched
 submodule and then build without applying the patches again: the added NEON
 instructions are required by tested applications.
 
-The internal Cargo binary is named `touchHLE`. Release bundles rename it to
-ChronaHLE while keeping the internal library ABI stable.
+The desktop binary is named `ChronaHLE`. Android builds the shared core as
+`libchronahle.so`.
 
 ## Windows
 
@@ -49,10 +49,10 @@ Python and Boost. Extract Boost into `vendor/boost`.
 
 ```powershell
 cargo test --lib
-cargo build --release --bin touchHLE
+cargo build --release --bin ChronaHLE
 ```
 
-The executable is `target\release\touchHLE.exe`. Use
+The executable is `target\release\ChronaHLE.exe`. Use
 `dev-scripts/make-windows-bundle.sh` from Git Bash to create a distributable
 bundle with runtime files.
 
@@ -72,7 +72,7 @@ Then run:
 
 ```text
 cargo test --lib
-cargo build --release --bin touchHLE
+cargo build --release --bin ChronaHLE
 ```
 
 ## Android ARM64

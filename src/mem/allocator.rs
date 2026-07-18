@@ -4,7 +4,7 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
 use super::{GuestUSize, VAddr, PAGE_SIZE};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::num::NonZeroU32;
 
 /// iPhone OS's allocator always aligns to 16 bytes at minimum, and this
@@ -261,7 +261,7 @@ mod collections {
     pub struct SizeBucketedChunkMap {
         min_chunk_size: u32,
         chunks: ChunkMap,
-        chunks_by_log2_size: Vec<Vec<Chunk>>,
+        chunks_by_log2_size: Vec<BTreeSet<(GuestUSize, VAddr)>>,
     }
     impl SizeBucketedChunkMap {
         pub fn new(min_chunk_size: u32) -> Self {
@@ -269,7 +269,7 @@ mod collections {
                 min_chunk_size,
                 chunks: Default::default(),
                 chunks_by_log2_size: vec![
-                    Vec::new();
+                    BTreeSet::new();
                     (u32::MAX.ilog2() - min_chunk_size.ilog2()) as usize + 1
                 ],
             }
@@ -284,21 +284,14 @@ mod collections {
             assert!(chunk.size.get() >= self.min_chunk_size);
             self.chunks.insert(chunk);
             let bucket_size = self.bucket_for(chunk.size.get());
-            self.chunks_by_log2_size[bucket_size].push(chunk);
+            assert!(self.chunks_by_log2_size[bucket_size].insert((chunk.size.get(), chunk.base)));
         }
 
         #[inline(always)]
         fn remove_from_bucket(&mut self, chunk: Chunk) {
             let bucket_size = self.bucket_for(chunk.size.get());
             let bucket = &mut self.chunks_by_log2_size[bucket_size];
-            // Search from the end (recent frees are usually at the end, so
-            // following the generational hypothesis, that's a better place to
-            // start)
-            let idx = bucket
-                .iter()
-                .rposition(|chunk2| chunk.base == chunk2.base)
-                .unwrap();
-            assert_eq!(chunk, bucket.swap_remove(idx));
+            assert!(bucket.remove(&(chunk.size.get(), chunk.base)));
         }
 
         pub fn remove_with_base(&mut self, base: VAddr) -> Option<Chunk> {
@@ -336,30 +329,10 @@ mod collections {
         }
 
         fn allocate_in_bucket(&mut self, size: GuestUSize, bucket: usize) -> Option<Chunk> {
-            let (idx, _) = {
-                let mut best_chunk: Option<(usize, GuestUSize)> = None;
-
-                // Search from end because we should prefer recently-freed
-                // allocations that might be the right size.
-                for (idx, chunk) in self.chunks_by_log2_size[bucket]
-                    .iter_mut()
-                    .enumerate()
-                    .rev()
-                {
-                    if chunk.size.get() >= size
-                        && (best_chunk.is_none() || best_chunk.unwrap().1 > chunk.size.get())
-                    {
-                        best_chunk = Some((idx, chunk.size.get()));
-                        if chunk.size.get() == size {
-                            break;
-                        }
-                    }
-                }
-
-                best_chunk
-            }?;
-
-            let existing = self.chunks_by_log2_size[bucket].swap_remove(idx);
+            let &(existing_size, existing_base) =
+                self.chunks_by_log2_size[bucket].range((size, 0)..).next()?;
+            assert!(self.chunks_by_log2_size[bucket].remove(&(existing_size, existing_base)));
+            let existing = Chunk::new(existing_base, existing_size);
             let existing2 = self.chunks.remove_with_base(existing.base);
             assert_eq!(Some(existing), existing2);
 
@@ -400,7 +373,28 @@ mod collections {
             self.chunks_by_log2_size
                 .iter()
                 .flat_map(|chunks| chunks.iter())
-                .copied()
+                .map(|&(size, base)| Chunk::new(base, size))
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::SizeBucketedChunkMap;
+        use crate::mem::allocator::Chunk;
+
+        #[test]
+        fn allocation_uses_smallest_suitable_chunk() {
+            let mut chunks = SizeBucketedChunkMap::new(16);
+            chunks.insert(Chunk::new(0x1000, 64));
+            chunks.insert(Chunk::new(0x2000, 48));
+            chunks.insert(Chunk::new(0x3000, 96));
+
+            assert_eq!(chunks.allocate(32), Some(Chunk::new(0x2000, 32)));
+            assert_eq!(
+                chunks.remove_with_base(0x2020),
+                Some(Chunk::new(0x2020, 16))
+            );
+            assert_eq!(chunks.allocate(64), Some(Chunk::new(0x1000, 64)));
         }
     }
 }

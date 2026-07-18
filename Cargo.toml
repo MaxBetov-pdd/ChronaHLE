@@ -8,27 +8,30 @@ version = "0.3.0"
 edition = "2021"
 license = "MPL-2.0"
 authors = ["touchHLE project contributors", "ChronaHLE contributors"]
-# The ChronaHLE product relationship is documented in README.md and
-# FORK_NOTICE.md. Repository metadata will be added with the public URL.
+repository = "https://github.com/MaxBetov-pdd/ChronaHLE"
+homepage = "https://chronahle.xyz/"
 
 [package]
-name = "touchHLE"
+name = "chronahle"
 version = { workspace = true }
 edition = { workspace = true }
 license = { workspace = true }
 authors = { workspace = true }
+description = "High-level emulator for 32-bit iPhone OS and iOS applications"
+repository = { workspace = true }
+homepage = { workspace = true }
 
 [lib]
 # https://users.rust-lang.org/t/making-both-binary-and-cdylib-from-one-package/29105
 crate-type = ["cdylib", "rlib"]
 
 [[bin]]
-name = "touchHLE"
+name = "ChronaHLE"
 path = "src/bin.rs"
 
 [features]
 default = ["static"]
-static = ["sdl2/bundled", "sdl2/static-link", "touchHLE_openal_soft_wrapper/static"]
+static = ["sdl2/bundled", "sdl2/static-link", "chronahle_openal_soft_wrapper/static"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -65,17 +68,17 @@ encoding_rs = "0.8.35"
 # We currently use a fork of rust-sdl2 because we need a fix for Android builds
 # that's not upstream yet.
 # The HIDAPI feature is enabled because rust-sdl2 hides the SDL2 sensor features
-# behind this, but the actual HIDAPI is not used by touchHLE (see window.rs).
+# behind this, but the actual HIDAPI is not used by ChronaHLE (see window.rs).
 # Note that the submodule in vendor/SDL2/ must use exactly the same revision of
 # SDL2 that rust-sdl2 uses, so that the Android JNI interface matches.
 sdl2 = { git = "https://github.com/touchHLE/rust-sdl2", tag = "touchHLE-3", features = ["hidapi"] }
 sdl2-sys = { git = "https://github.com/touchHLE/rust-sdl2", tag = "touchHLE-3" }
-touchHLE_dynarmic_wrapper = { path = "src/cpu/dynarmic_wrapper" }
-touchHLE_gl_bindings = { path = "src/gles/gl_bindings" }
-touchHLE_openal_soft_wrapper = { path = "src/audio/openal_soft_wrapper" }
-touchHLE_pvrt_decompress_wrapper = { path = "src/image/pvrt_decompress_wrapper" }
-touchHLE_stb_image_wrapper = { path = "src/image/stb_image_wrapper" }
-touchHLE_version = { path = "src/version" }
+chronahle_dynarmic_wrapper = { path = "src/cpu/dynarmic_wrapper" }
+chronahle_gl_bindings = { path = "src/gles/gl_bindings" }
+chronahle_openal_soft_wrapper = { path = "src/audio/openal_soft_wrapper" }
+chronahle_pvrt_decompress_wrapper = { path = "src/image/pvrt_decompress_wrapper" }
+chronahle_stb_image_wrapper = { path = "src/image/stb_image_wrapper" }
+chronahle_version = { path = "src/version" }
 windows-sys = { version = "0.61.0", features = ["Win32_System_Memory"] }
 nibarchive = "0.1.0"
 libc = "0.2.180"

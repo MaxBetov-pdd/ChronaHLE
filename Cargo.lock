@@ -165,6 +165,81 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 
 [[package]]
+name = "chronahle"
+version = "0.3.0"
+dependencies = [
+ "cargo-license",
+ "cc",
+ "chronahle_dynarmic_wrapper",
+ "chronahle_gl_bindings",
+ "chronahle_openal_soft_wrapper",
+ "chronahle_pvrt_decompress_wrapper",
+ "chronahle_stb_image_wrapper",
+ "chronahle_version",
+ "cmake",
+ "corosensei",
+ "digest",
+ "encoding_rs",
+ "gl_generator",
+ "hound",
+ "libc",
+ "mach_object",
+ "md-5",
+ "nibarchive",
+ "owned_ttf_parser",
+ "plist",
+ "quick-xml",
+ "rusttype",
+ "sdl2",
+ "sdl2-sys",
+ "sha1",
+ "symphonia",
+ "uuid",
+ "windows-sys 0.61.0",
+ "zip",
+]
+
+[[package]]
+name = "chronahle_dynarmic_wrapper"
+version = "0.3.0"
+dependencies = [
+ "cc",
+ "cmake",
+]
+
+[[package]]
+name = "chronahle_gl_bindings"
+version = "0.3.0"
+dependencies = [
+ "gl_generator",
+]
+
+[[package]]
+name = "chronahle_openal_soft_wrapper"
+version = "0.3.0"
+dependencies = [
+ "cmake",
+]
+
+[[package]]
+name = "chronahle_pvrt_decompress_wrapper"
+version = "0.3.0"
+dependencies = [
+ "cc",
+]
+
+[[package]]
+name = "chronahle_stb_image_wrapper"
+version = "0.3.0"
+dependencies = [
+ "cc",
+]
+
+[[package]]
+name = "chronahle_version"
+version = "0.3.0"
+
+[[package]]
 name = "clap"
 version = "3.2.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1000,81 +1075,6 @@ checksum = "f4f7f0dd8d50a853a531c426359045b1998f04219d88799810762cd4ad314234"
 dependencies = [
  "serde",
 ]
-
-[[package]]
-name = "touchHLE"
-version = "0.3.0"
-dependencies = [
- "cargo-license",
- "cc",
- "cmake",
- "corosensei",
- "digest",
- "encoding_rs",
- "gl_generator",
- "hound",
- "libc",
- "mach_object",
- "md-5",
- "nibarchive",
- "owned_ttf_parser",
- "plist",
- "quick-xml",
- "rusttype",
- "sdl2",
- "sdl2-sys",
- "sha1",
- "symphonia",
- "touchHLE_dynarmic_wrapper",
- "touchHLE_gl_bindings",
- "touchHLE_openal_soft_wrapper",
- "touchHLE_pvrt_decompress_wrapper",
- "touchHLE_stb_image_wrapper",
- "touchHLE_version",
- "uuid",
- "windows-sys 0.61.0",
- "zip",
-]
-
-[[package]]
-name = "touchHLE_dynarmic_wrapper"
-version = "0.3.0"
-dependencies = [
- "cc",
- "cmake",
-]
-
-[[package]]
-name = "touchHLE_gl_bindings"
-version = "0.3.0"
-dependencies = [
- "gl_generator",
-]
-
-[[package]]
-name = "touchHLE_openal_soft_wrapper"
-version = "0.3.0"
-dependencies = [
- "cmake",
-]
-
-[[package]]
-name = "touchHLE_pvrt_decompress_wrapper"
-version = "0.3.0"
-dependencies = [
- "cc",
-]
-
-[[package]]
-name = "touchHLE_stb_image_wrapper"
-version = "0.3.0"
-dependencies = [
- "cc",
-]
-
-[[package]]
-name = "touchHLE_version"
-version = "0.3.0"
 
 [[package]]
 name = "ttf-parser"

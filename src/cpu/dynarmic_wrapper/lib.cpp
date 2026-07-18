@@ -11,22 +11,22 @@
 #include "dynarmic/interface/A32/coprocessor.h"
 #include "dynarmic/interface/exclusive_monitor.h"
 
-namespace touchHLE::cpu {
+namespace ChronaHLE::cpu {
 
 using VAddr = std::uint32_t;
 
 // Types and functions defined in Rust
 extern "C" {
-struct touchHLE_Mem;
-std::uint8_t touchHLE_cpu_read_u8(touchHLE_Mem *mem, VAddr addr, bool *error);
-std::uint16_t touchHLE_cpu_read_u16(touchHLE_Mem *mem, VAddr addr, bool *error);
-std::uint32_t touchHLE_cpu_read_u32(touchHLE_Mem *mem, VAddr addr, bool *error);
-std::uint64_t touchHLE_cpu_read_u64(touchHLE_Mem *mem, VAddr addr, bool *error);
-bool touchHLE_cpu_write_u8(touchHLE_Mem *mem, VAddr addr, std::uint8_t value);
-bool touchHLE_cpu_write_u16(touchHLE_Mem *mem, VAddr addr, std::uint16_t value);
-bool touchHLE_cpu_write_u32(touchHLE_Mem *mem, VAddr addr, std::uint32_t value);
-bool touchHLE_cpu_write_u64(touchHLE_Mem *mem, VAddr addr, std::uint64_t value);
-struct touchHLE_DynarmicContext {
+struct ChronaHLE_Mem;
+std::uint8_t ChronaHLE_cpu_read_u8(ChronaHLE_Mem *mem, VAddr addr, bool *error);
+std::uint16_t ChronaHLE_cpu_read_u16(ChronaHLE_Mem *mem, VAddr addr, bool *error);
+std::uint32_t ChronaHLE_cpu_read_u32(ChronaHLE_Mem *mem, VAddr addr, bool *error);
+std::uint64_t ChronaHLE_cpu_read_u64(ChronaHLE_Mem *mem, VAddr addr, bool *error);
+bool ChronaHLE_cpu_write_u8(ChronaHLE_Mem *mem, VAddr addr, std::uint8_t value);
+bool ChronaHLE_cpu_write_u16(ChronaHLE_Mem *mem, VAddr addr, std::uint16_t value);
+bool ChronaHLE_cpu_write_u32(ChronaHLE_Mem *mem, VAddr addr, std::uint32_t value);
+bool ChronaHLE_cpu_write_u64(ChronaHLE_Mem *mem, VAddr addr, std::uint64_t value);
+struct ChronaHLE_DynarmicContext {
   std::array<std::uint32_t, 16> regs;
   std::array<std::uint32_t, 64> extregs;
   std::uint32_t cpsr;
@@ -41,14 +41,14 @@ const auto HaltReasonBreakpoint = Dynarmic::HaltReason::UserDefined3;
 class Environment final : public Dynarmic::A32::UserCallbacks {
 public:
   Dynarmic::A32::Jit *cpu = nullptr;
-  touchHLE_Mem *mem = nullptr;
+  ChronaHLE_Mem *mem = nullptr;
   std::uint64_t ticks_remaining;
   uint32_t halting_svc;
 
 private:
   std::uint8_t MemoryRead8(VAddr vaddr) override {
     bool error;
-    auto value = touchHLE_cpu_read_u8(mem, vaddr, &error);
+    auto value = ChronaHLE_cpu_read_u8(mem, vaddr, &error);
     if (error) {
       cpu->HaltExecution(Dynarmic::HaltReason::MemoryAbort);
     }
@@ -56,7 +56,7 @@ private:
   }
   std::uint16_t MemoryRead16(VAddr vaddr) override {
     bool error;
-    auto value = touchHLE_cpu_read_u16(mem, vaddr, &error);
+    auto value = ChronaHLE_cpu_read_u16(mem, vaddr, &error);
     if (error) {
       cpu->HaltExecution(Dynarmic::HaltReason::MemoryAbort);
     }
@@ -64,7 +64,7 @@ private:
   }
   std::uint32_t MemoryRead32(VAddr vaddr) override {
     bool error;
-    auto value = touchHLE_cpu_read_u32(mem, vaddr, &error);
+    auto value = ChronaHLE_cpu_read_u32(mem, vaddr, &error);
     if (error) {
       cpu->HaltExecution(Dynarmic::HaltReason::MemoryAbort);
     }
@@ -72,7 +72,7 @@ private:
   }
   std::uint64_t MemoryRead64(VAddr vaddr) override {
     bool error;
-    auto value = touchHLE_cpu_read_u64(mem, vaddr, &error);
+    auto value = ChronaHLE_cpu_read_u64(mem, vaddr, &error);
     if (error) {
       cpu->HaltExecution(Dynarmic::HaltReason::MemoryAbort);
     }
@@ -81,7 +81,7 @@ private:
 
   std::optional<std::uint32_t> MemoryReadCode(VAddr vaddr) override {
     bool error;
-    auto value = touchHLE_cpu_read_u32(mem, vaddr, &error);
+    auto value = ChronaHLE_cpu_read_u32(mem, vaddr, &error);
     if (error) {
       return std::nullopt;
     } else {
@@ -90,22 +90,22 @@ private:
   }
 
   void MemoryWrite8(VAddr vaddr, std::uint8_t value) override {
-    if (touchHLE_cpu_write_u8(mem, vaddr, value)) {
+    if (ChronaHLE_cpu_write_u8(mem, vaddr, value)) {
       cpu->HaltExecution(Dynarmic::HaltReason::MemoryAbort);
     }
   }
   void MemoryWrite16(VAddr vaddr, std::uint16_t value) override {
-    if (touchHLE_cpu_write_u16(mem, vaddr, value)) {
+    if (ChronaHLE_cpu_write_u16(mem, vaddr, value)) {
       cpu->HaltExecution(Dynarmic::HaltReason::MemoryAbort);
     }
   }
   void MemoryWrite32(VAddr vaddr, std::uint32_t value) override {
-    if (touchHLE_cpu_write_u32(mem, vaddr, value)) {
+    if (ChronaHLE_cpu_write_u32(mem, vaddr, value)) {
       cpu->HaltExecution(Dynarmic::HaltReason::MemoryAbort);
     }
   }
   void MemoryWrite64(VAddr vaddr, std::uint64_t value) override {
-    if (touchHLE_cpu_write_u64(mem, vaddr, value)) {
+    if (ChronaHLE_cpu_write_u64(mem, vaddr, value)) {
       cpu->HaltExecution(Dynarmic::HaltReason::MemoryAbort);
     }
   }
@@ -232,8 +232,17 @@ public:
     user_config.coprocessors[15] = std::make_shared<ArmDynarmicCP15>();
     mon = std::make_unique<Dynarmic::ExclusiveMonitor>(1);
     user_config.global_monitor = mon.get();
-    // TODO: only do this in debug builds? it's probably expensive
-    user_config.check_halt_on_memory_access = true;
+    // Memory faults are terminal guest errors in ChronaHLE rather than
+    // recoverable protection faults. Checking the halt flag after every guest
+    // memory access is therefore unnecessary, and it also disables Dynarmic's
+    // safe GetSetElimination optimization.
+    user_config.check_halt_on_memory_access = false;
+    user_config.always_little_endian = true;
+#if defined(__x86_64__) || defined(_M_X64)
+    // Unity/Mono touches a large amount of native and generated ARM code.
+    // Avoid flushing the entire JIT cache during longer sessions on x64 hosts.
+    user_config.code_cache_size = 512 * 1024 * 1024;
+#endif
     if (direct_memory_access_ptr) {
       // The guest address space is a contiguous, protected 4 GiB host mapping.
       // Fastmem can therefore access it directly. If a protected page faults,
@@ -273,8 +282,8 @@ public:
     cpu->InvalidateCacheRange(start, size);
   }
 
-  void swap_context(touchHLE_DynarmicContext *context) {
-    touchHLE_DynarmicContext tmp = {cpu->Regs(), cpu->ExtRegs(), cpu->Cpsr(),
+  void swap_context(ChronaHLE_DynarmicContext *context) {
+    ChronaHLE_DynarmicContext tmp = {cpu->Regs(), cpu->ExtRegs(), cpu->Cpsr(),
                                     cpu->Fpscr()};
     cpu->Regs() = context->regs;
     cpu->ExtRegs() = context->extregs;
@@ -283,7 +292,7 @@ public:
     *context = tmp;
   }
 
-  std::int32_t run_or_step(touchHLE_Mem *mem, std::uint64_t *ticks) {
+  std::int32_t run_or_step(ChronaHLE_Mem *mem, std::uint64_t *ticks) {
     env.mem = mem;
     Dynarmic::HaltReason hr;
     if (ticks) {
@@ -317,44 +326,44 @@ public:
 
 extern "C" {
 
-DynarmicWrapper *touchHLE_DynarmicWrapper_new(void *direct_memory_access_ptr,
+DynarmicWrapper *ChronaHLE_DynarmicWrapper_new(void *direct_memory_access_ptr,
                                               size_t null_page_count) {
   return new DynarmicWrapper(direct_memory_access_ptr, null_page_count);
 }
-void touchHLE_DynarmicWrapper_delete(DynarmicWrapper *cpu) { delete cpu; }
+void ChronaHLE_DynarmicWrapper_delete(DynarmicWrapper *cpu) { delete cpu; }
 
 const std::uint32_t *
-touchHLE_DynarmicWrapper_regs_const(const DynarmicWrapper *cpu) {
+ChronaHLE_DynarmicWrapper_regs_const(const DynarmicWrapper *cpu) {
   return cpu->regs();
 }
-std::uint32_t *touchHLE_DynarmicWrapper_regs_mut(DynarmicWrapper *cpu) {
+std::uint32_t *ChronaHLE_DynarmicWrapper_regs_mut(DynarmicWrapper *cpu) {
   return cpu->regs();
 }
 
-std::uint32_t touchHLE_DynarmicWrapper_cpsr(const DynarmicWrapper *cpu) {
+std::uint32_t ChronaHLE_DynarmicWrapper_cpsr(const DynarmicWrapper *cpu) {
   return cpu->cpsr();
 }
-void touchHLE_DynarmicWrapper_set_cpsr(DynarmicWrapper *cpu,
+void ChronaHLE_DynarmicWrapper_set_cpsr(DynarmicWrapper *cpu,
                                        std::uint32_t cpsr) {
   cpu->set_cpsr(cpsr);
 }
 
-void touchHLE_DynarmicWrapper_swap_context(DynarmicWrapper *cpu,
-                                           touchHLE_DynarmicContext *context) {
+void ChronaHLE_DynarmicWrapper_swap_context(DynarmicWrapper *cpu,
+                                           ChronaHLE_DynarmicContext *context) {
   cpu->swap_context(context);
 }
 
-void touchHLE_DynarmicWrapper_invalidate_cache_range(DynarmicWrapper *cpu,
+void ChronaHLE_DynarmicWrapper_invalidate_cache_range(DynarmicWrapper *cpu,
                                                      VAddr start,
                                                      std::uint32_t size) {
   cpu->invalidate_cache_range(start, size);
 }
 
-std::int32_t touchHLE_DynarmicWrapper_run_or_step(DynarmicWrapper *cpu,
-                                                  touchHLE_Mem *mem,
+std::int32_t ChronaHLE_DynarmicWrapper_run_or_step(DynarmicWrapper *cpu,
+                                                  ChronaHLE_Mem *mem,
                                                   std::uint64_t *ticks) {
   return cpu->run_or_step(mem, ticks);
 }
 }
 
-} // namespace touchHLE::cpu
+} // namespace ChronaHLE::cpu

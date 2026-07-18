@@ -1,6 +1,16 @@
 # ChronaHLE
 
-ChronaHLE is an experimental high-level emulator targeting the complete
+[![CI](https://github.com/MaxBetov-pdd/ChronaHLE/actions/workflows/build.yml/badge.svg)](https://github.com/MaxBetov-pdd/ChronaHLE/actions/workflows/build.yml)
+[![Latest release](https://img.shields.io/github/v/release/MaxBetov-pdd/ChronaHLE?display_name=tag)](https://github.com/MaxBetov-pdd/ChronaHLE/releases/latest)
+[![License: MPL-2.0](https://img.shields.io/badge/license-MPL--2.0-blue.svg)](LICENSE)
+[![Website](https://img.shields.io/badge/website-chronahle.xyz-13b8a6.svg)](https://chronahle.xyz/)
+[![Compatibility database](https://img.shields.io/badge/game%20compatibility-appdb.chronahle.xyz-4c8bf5.svg)](https://appdb.chronahle.xyz/)
+
+Game compatibility, tested versions, platform-specific results and current
+support status are tracked at
+[appdb.chronahle.xyz](https://appdb.chronahle.xyz/).
+
+ChronaHLE is a cross-platform high-level emulator targeting the complete
 32-bit era from iPhone OS 1 through iOS 6. The goal is one emulator for games
 and applications across these releases, with compatibility expanded globally
 through reusable framework and system API implementations rather than
@@ -21,6 +31,8 @@ ChronaHLE is derived from [touchHLE](https://github.com/touchHLE/touchHLE) and
 retains the required license notices and third-party acknowledgements. See
 [FORK_NOTICE.md](FORK_NOTICE.md) for the exact relationship.
 
+Project website: [chronahle.xyz](https://chronahle.xyz/)
+
 > ChronaHLE is early development software. Compatibility is per-application,
 > and no Apple software, applications, games or encryption keys are included.
 
@@ -34,31 +46,38 @@ retains the required license notices and third-party acknowledgements. See
 - Future scope: ARM64 guest execution and iOS 7+ API expansion. Neither is
   implemented yet.
 
-## Platform status
+## Supported platforms
 
-| Host | Status | Notes |
+| Platform | Host architecture | Release package |
 | --- | --- | --- |
-| Windows x86_64 | Verified | Primary development platform; release build and unit tests pass. |
-| Linux x86_64 | CI target | Built and tested by GitHub Actions. Runtime graphics still needs hardware coverage. |
-| Android ARM64 | Experimental | APK, 16 KB page alignment and native GLES2 compilation are verified. Physical-device game testing is still required. |
+| Windows | x86_64 | ZIP archive |
+| Linux | x86_64 | TAR.GZ archive |
+| Android | ARM64 | APK |
 
-More detail is in [docs/PLATFORMS.md](docs/PLATFORMS.md).
-Candidate game-test results are tracked in
-[docs/COMPATIBILITY.md](docs/COMPATIBILITY.md).
+All three platforms use the same Rust emulation core and receive the same iOS
+framework and compatibility implementations. Windowing, graphics drivers,
+audio devices, input and packaging use platform-specific integrations, so an
+individual application can still behave differently between hosts.
+
+More detail is in [docs/PLATFORMS.md](docs/PLATFORMS.md). Public application
+compatibility status is maintained at
+[appdb.chronahle.xyz](https://appdb.chronahle.xyz/).
 
 ## Quick start
 
-1. Obtain a release for your host or build ChronaHLE using
+1. Download the build for your host from
+   [GitHub Releases](https://github.com/MaxBetov-pdd/ChronaHLE/releases) or build
+   ChronaHLE using
    [docs/BUILDING.md](docs/BUILDING.md).
 2. Use only decrypted `.ipa` or `.app` files that you are legally entitled to
    use. ChronaHLE does not bypass DRM.
 3. Desktop: run `ChronaHLE.exe "Path to App.ipa"` (Windows) or the equivalent
    binary on Linux.
 4. Android: launch ChronaHLE once, then place applications in the
-   `touchHLE_apps` data directory through the Android document provider.
+   `ChronaHLE_apps` data directory through the Android document provider.
 
-Internal data directory names currently retain the `touchHLE_*` prefix so
-existing runtime layouts and upstream tools remain compatible.
+ChronaHLE automatically migrates legacy local app, sandbox, options and
+wallpaper paths from builds that used the old prefix.
 
 ## Architecture
 
@@ -88,16 +107,12 @@ Useful commands:
 bash ./dev-scripts/apply-vendor-patches.sh
 cargo fmt --all -- --check
 cargo test --lib
-cargo build --release --bin touchHLE
+cargo build --release --bin ChronaHLE
 ```
 
 On Windows, use `dev-scripts\apply-vendor-patches.ps1` for the first command.
 
-The internal Cargo binary is still named `touchHLE`; release packaging renames
-it to ChronaHLE. This avoids a risky ABI-wide rename while the fork stabilizes.
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution rules and
-[docs/BUILDING.md](docs/BUILDING.md) for platform prerequisites.
+See [docs/BUILDING.md](docs/BUILDING.md) for platform prerequisites.
 
 Stable tags additionally require the manual game regression matrix in
 [docs/RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md).

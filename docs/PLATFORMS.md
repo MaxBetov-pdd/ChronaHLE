@@ -1,4 +1,4 @@
-# Platform status
+# Supported platforms
 
 ChronaHLE uses one Rust emulation core on every host. Host integrations are not
 identical: graphics context creation, audio devices, filesystem access, input,
@@ -22,12 +22,11 @@ Wayland.
 Android supports ARM64 hosts only. APK builds use NDK 28 and all native LOAD
 segments are aligned for 16 KB memory-page devices.
 
-The Android app picker and native OpenGL ES 1.1 host path are supported by the
-upstream architecture. Applications that create an OpenGL ES 2 EAGL context
-now receive a native EGL GLES2 context. Initial presentation uses a correct but
-slower RGBA readback/upload path until the direct GPU path is validated. GLES2
-remains experimental until physical-device tests pass. See
-[ANDROID_GLES.md](ANDROID_GLES.md).
+The Android app picker and native OpenGL ES 1.1 host path are supported.
+Applications that create an OpenGL ES 2 EAGL context receive a native EGL
+GLES2 context. The compatibility presentation path has been exercised in real
+gameplay on a Pixel 7a; its RGBA readback/upload path can still be slower than
+direct GPU presentation. See [ANDROID_GLES.md](ANDROID_GLES.md).
 
 ## Guest architecture
 

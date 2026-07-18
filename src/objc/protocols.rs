@@ -14,7 +14,11 @@ use std::collections::HashSet;
 
 pub(super) type Protocol = id;
 
-/// The 32-bit Objective-C 2 protocol layout used by iOS applications.
+/// The stable prefix of the 32-bit Objective-C 2 protocol layout.
+///
+/// Later runtime versions append size, flags and extended type metadata. Old
+/// iOS binaries can legitimately omit those fields, while the fields below
+/// retain the same layout across both variants.
 #[repr(C, packed)]
 struct protocol_t {
     _isa: id,
@@ -25,9 +29,6 @@ struct protocol_t {
     optional_instance_methods: ConstPtr<method_list_t>,
     optional_class_methods: ConstPtr<method_list_t>,
     _instance_properties: ConstVoidPtr,
-    _size: GuestUSize,
-    _flags: u32,
-    _extended_method_types: ConstPtr<ConstPtr<u8>>,
 }
 unsafe impl SafeRead for protocol_t {}
 
@@ -99,7 +100,6 @@ impl ObjC {
         for i in 0..count {
             let protocol = mem.read(base + i);
             let raw: protocol_t = mem.read(protocol.cast());
-            assert!(raw._size >= guest_size_of::<protocol_t>());
             let name = mem.cstr_at_utf8(raw.name).unwrap().to_string();
 
             assert!(

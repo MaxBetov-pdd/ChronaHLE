@@ -19,7 +19,7 @@ public class MainActivity extends SDLActivity {
     protected String[] getLibraries() {
         return new String[]{
             "SDL2",
-            "touchHLE"
+            "chronahle"
         };
     }
 }

@@ -1,1 +1,8 @@
-blank_issues_enabled: true
+blank_issues_enabled: false
+contact_links:
+  - name: ChronaHLE website
+    url: https://chronahle.xyz/
+    about: Project overview, downloads and documentation.
+  - name: Security report
+    url: https://github.com/MaxBetov-pdd/ChronaHLE/security/advisories/new
+    about: Report a security issue privately.

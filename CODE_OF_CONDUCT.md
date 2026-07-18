@@ -13,4 +13,5 @@ Do not upload, link to, request or offer pirated applications, games, SDKs,
 keys or extracted proprietary assets. "Abandonware" is not a legal exception.
 Bug reports should contain metadata and logs, never the application binary.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for repository rules.
+Source contributions must preserve applicable license notices and must not
+include proprietary application data, Apple SDK content or signing keys.

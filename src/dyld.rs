@@ -291,7 +291,7 @@ impl Dyld {
             constants_to_link_later: Vec::new(),
             non_lazy_host_functions: HashMap::new(),
             return_this_wrappers: HashMap::new(),
-            host_call_profile: std::env::var_os("TOUCHHLE_PROFILE_HOST_CALLS").map(|_| {
+            host_call_profile: crate::host_env_var_os("PROFILE_HOST_CALLS").map(|_| {
                 HostCallProfile {
                     counts: Vec::new(),
                     last_report: Instant::now(),

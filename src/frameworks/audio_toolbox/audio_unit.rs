@@ -7,6 +7,7 @@
 //!
 //! [Audio Unit Programming Guide](https://developer.apple.com/library/archive/documentation/MusicAudio/Conceptual/AudioUnitProgrammingGuide/TheAudioUnit/TheAudioUnit.html)
 
+use std::sync::OnceLock;
 use std::time::Instant;
 
 use crate::audio::openal::al_types::{ALuint, ALvoid};
@@ -62,6 +63,11 @@ const kAudioUnitProperty_MaximumFramesPerSlice: AudioUnitPropertyID = 14;
 const kAudioUnitProperty_StreamFormat: AudioUnitPropertyID = 8;
 
 const kAudioOutputUnitProperty_EnableIO: AudioUnitPropertyID = 2003;
+
+fn profile_stalls() -> bool {
+    static PROFILE_STALLS: OnceLock<bool> = OnceLock::new();
+    *PROFILE_STALLS.get_or_init(|| crate::host_env_var_os("PROFILE_STALLS").is_some())
+}
 
 fn AudioUnitInitialize(env: &mut Environment, in_unit: AudioUnit) -> OSStatus {
     let run_loop = CFRunLoopGetMain(env);
@@ -435,6 +441,7 @@ pub fn render_audio_unit(env: &mut Environment, audio_unit: AudioUnit) {
             input_proc: inputProc,
             input_proc_ref_con: inputProcRefCon,
         } = render_callback;
+        let callback_started = profile_stalls().then(Instant::now);
         let () = inputProc.call_from_host(
             env,
             (
@@ -446,6 +453,17 @@ pub fn render_audio_unit(env: &mut Environment, audio_unit: AudioUnit) {
                 audio_buffer_list,
             ),
         );
+        if let Some(callback_started) = callback_started {
+            let callback_elapsed = callback_started.elapsed();
+            if callback_elapsed >= std::time::Duration::from_millis(20) {
+                log!(
+                    "Slow AudioUnit {:?} render callback: {:.1} ms for {} frames",
+                    audio_unit,
+                    callback_elapsed.as_secs_f64() * 1000.0,
+                    number_frames,
+                );
+            }
+        }
 
         let at_state = &mut env.framework_state.audio_toolbox;
         let context = at_state

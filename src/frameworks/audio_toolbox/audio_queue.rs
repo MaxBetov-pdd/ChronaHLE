@@ -138,7 +138,7 @@ const kAudioQueueErr_BufferInQueue: OSStatus = -66679;
 const kAudioQueueErr_CannotStart: OSStatus = -66681;
 
 fn trace_audio_queues() -> bool {
-    std::env::var_os("TOUCHHLE_TRACE_AUDIOQUEUES").is_some()
+    crate::host_env_var_os("TRACE_AUDIOQUEUES").is_some()
 }
 
 pub fn AudioQueueNewOutput(

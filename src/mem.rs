@@ -246,13 +246,6 @@ pub struct Mem {
 
     heap_allocator: Option<HeapAllocator>,
     vm_allocator: VMAllocator,
-
-    /// The flag to control if memory is zeroed out on free (`true`, default)
-    /// or on alloc (`false`).
-    ///
-    /// Right now only one game, Spore Origin, is setting this value to `false`
-    /// via a game-specific hack. See [crate::Environment] for more info.
-    pub(super) zero_memory_on_free: bool,
 }
 
 impl Drop for Mem {
@@ -298,7 +291,6 @@ impl Mem {
             null_segment_size: 0,
             vm_allocator,
             heap_allocator: None,
-            zero_memory_on_free: true,
         }
     }
 
@@ -531,6 +523,13 @@ impl Mem {
 
     /// Allocate `size` bytes in the default heap.
     pub fn alloc(&mut self, size: GuestUSize) -> MutVoidPtr {
+        let ptr = self.alloc_uninitialized(size);
+        self.bytes_at_mut(ptr.cast(), size).fill(0);
+        ptr
+    }
+
+    /// Allocate guest `malloc` memory without imposing initialization semantics.
+    pub fn alloc_uninitialized(&mut self, size: GuestUSize) -> MutVoidPtr {
         self.alloc_in_heap(None, size)
     }
 
@@ -549,10 +548,6 @@ impl Mem {
         };
         let ptr = Ptr::from_bits(alloc.base);
 
-        if !self.zero_memory_on_free && alloc.size.get() <= HeapAllocator::HEAP_ALLOCATION_THRESHOLD
-        {
-            self.bytes_at_mut(ptr.cast(), size).fill(0);
-        }
         log_dbg!("Allocated {:?} ({:#x} bytes)", ptr, size);
         ptr
     }
@@ -577,7 +572,7 @@ impl Mem {
 
     /// Allocate `size` bytes initialized to 0.
     pub fn calloc(&mut self, size: GuestUSize) -> MutVoidPtr {
-        let ptr = self.alloc(size);
+        let ptr = self.alloc_uninitialized(size);
         self.bytes_at_mut(ptr.cast(), size).fill(0);
         ptr
     }
@@ -667,11 +662,10 @@ impl Mem {
         let size = heap.free(vm, ptr.to_bits());
 
         if size > HeapAllocator::HEAP_ALLOCATION_THRESHOLD {
-            // VM allocations are always 0 initialized.
-            // TODO: Can this be done with vm_advise/equivalents
-            self.bytes_at_mut(ptr.cast(), size).fill(0);
-        } else if self.zero_memory_on_free {
-            self.bytes_at_mut(ptr.cast(), size).fill(0);
+            unsafe {
+                host::discard_pages(ptr.to_bits(), self.bytes, size)
+                    .expect("Failed to discard freed guest pages");
+            }
         }
 
         log_dbg!("Freed {:?} ({:#x} bytes)", ptr, size);
@@ -681,10 +675,10 @@ impl Mem {
     /// within the provided range are freed.
     pub fn vm_free(&mut self, ptr: MutVoidPtr, size: GuestUSize) {
         let freed = self.vm_allocator.deallocate(ptr.to_bits(), size);
-        // VM allocations are always 0 initialized.
-        // TODO: Can this be done with vm_advise/equivalents
-        self.bytes_at_mut(Ptr::from_bits(freed.base), freed.size.get())
-            .fill(0);
+        unsafe {
+            host::discard_pages(freed.base, self.bytes, freed.size.get())
+                .expect("Failed to discard freed guest pages");
+        }
     }
 
     /// Allocate memory large enough for a value of type `T` and write the value

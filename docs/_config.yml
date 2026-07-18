@@ -1,0 +1,6 @@
+title: ChronaHLE
+description: High-level emulator for 32-bit iPhone OS and iOS applications
+theme: jekyll-theme-cayman
+show_downloads: true
+github:
+  repository_url: https://github.com/MaxBetov-pdd/ChronaHLE

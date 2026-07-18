@@ -478,7 +478,7 @@ pub fn run_run_loop(
                         semaphore,
                     } = selector_objects.remove(index).unwrap();
                     log_dbg!("Running object selector request {target:?} {:?} {argument:?} on run loop {run_loop:?}", selector.as_str(env.mem.as_mut()));
-                    if std::env::var_os("TOUCHHLE_TRACE_RUNLOOP_SELECTORS").is_some() {
+                    if crate::host_env_var_os("TRACE_RUNLOOP_SELECTORS").is_some() {
                         log!(
                             "NSRunLoop selector target={target:?} selector={} argument={argument:?} run_loop={run_loop:?}",
                             selector.as_str(env.mem.as_mut())

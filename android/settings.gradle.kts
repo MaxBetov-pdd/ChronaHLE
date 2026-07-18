@@ -23,5 +23,5 @@ dependencyResolutionManagement {
 }
 
 include(":app")
-include(":touchhle")
-project(":touchhle").projectDir = file("${rootDir.parentFile}/src")
+include(":chronahle")
+project(":chronahle").projectDir = file("${rootDir.parentFile}/src")

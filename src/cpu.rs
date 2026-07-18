@@ -12,15 +12,17 @@
 
 use crate::abi::GuestFunction;
 use crate::mem::{ConstPtr, GuestUSize, Mem, MutPtr, Ptr, SafeRead, SafeWrite};
+use std::sync::OnceLock;
+use std::time::{Duration, Instant};
 
 // Import functions from C++
-use touchHLE_dynarmic_wrapper::*;
+use chronahle_dynarmic_wrapper::*;
 
 type VAddr = u32;
-pub type CpuContext = touchHLE_DynarmicContext;
+pub type CpuContext = ChronaHLE_DynarmicContext;
 
-fn touchHLE_cpu_read_impl<T: SafeRead + Default>(
-    mem: *mut touchHLE_Mem,
+fn ChronaHLE_cpu_read_impl<T: SafeRead + Default>(
+    mem: *mut ChronaHLE_Mem,
     addr: VAddr,
     error: *mut bool,
 ) -> T {
@@ -44,7 +46,7 @@ fn touchHLE_cpu_read_impl<T: SafeRead + Default>(
     }));
     if res.is_err() {
         eprintln!(
-            "touchHLE::cpu: guest memory read failed: addr={addr:#010x}, size={} bytes",
+            "chronahle::cpu: guest memory read failed: addr={addr:#010x}, size={} bytes",
             std::mem::size_of::<T>()
         );
     }
@@ -54,7 +56,7 @@ fn touchHLE_cpu_read_impl<T: SafeRead + Default>(
     res.unwrap_or_default()
 }
 
-fn touchHLE_cpu_write_impl<T: SafeWrite>(mem: *mut touchHLE_Mem, addr: VAddr, value: T) -> bool {
+fn ChronaHLE_cpu_write_impl<T: SafeWrite>(mem: *mut ChronaHLE_Mem, addr: VAddr, value: T) -> bool {
     // See comments above about catch_unwind
     let res = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         let mem = unsafe { &mut *mem.cast::<Mem>() };
@@ -66,40 +68,52 @@ fn touchHLE_cpu_write_impl<T: SafeWrite>(mem: *mut touchHLE_Mem, addr: VAddr, va
 
 // Export functions for use by C++
 #[no_mangle]
-extern "C" fn touchHLE_cpu_read_u8(mem: *mut touchHLE_Mem, addr: VAddr, error: *mut bool) -> u8 {
-    touchHLE_cpu_read_impl(mem, addr, error)
+extern "C" fn ChronaHLE_cpu_read_u8(mem: *mut ChronaHLE_Mem, addr: VAddr, error: *mut bool) -> u8 {
+    ChronaHLE_cpu_read_impl(mem, addr, error)
 }
 #[no_mangle]
-extern "C" fn touchHLE_cpu_read_u16(mem: *mut touchHLE_Mem, addr: VAddr, error: *mut bool) -> u16 {
-    touchHLE_cpu_read_impl(mem, addr, error)
+extern "C" fn ChronaHLE_cpu_read_u16(
+    mem: *mut ChronaHLE_Mem,
+    addr: VAddr,
+    error: *mut bool,
+) -> u16 {
+    ChronaHLE_cpu_read_impl(mem, addr, error)
 }
 #[no_mangle]
-extern "C" fn touchHLE_cpu_read_u32(mem: *mut touchHLE_Mem, addr: VAddr, error: *mut bool) -> u32 {
-    touchHLE_cpu_read_impl(mem, addr, error)
+extern "C" fn ChronaHLE_cpu_read_u32(
+    mem: *mut ChronaHLE_Mem,
+    addr: VAddr,
+    error: *mut bool,
+) -> u32 {
+    ChronaHLE_cpu_read_impl(mem, addr, error)
 }
 #[no_mangle]
-extern "C" fn touchHLE_cpu_read_u64(mem: *mut touchHLE_Mem, addr: VAddr, error: *mut bool) -> u64 {
-    touchHLE_cpu_read_impl(mem, addr, error)
+extern "C" fn ChronaHLE_cpu_read_u64(
+    mem: *mut ChronaHLE_Mem,
+    addr: VAddr,
+    error: *mut bool,
+) -> u64 {
+    ChronaHLE_cpu_read_impl(mem, addr, error)
 }
 #[no_mangle]
-extern "C" fn touchHLE_cpu_write_u8(mem: *mut touchHLE_Mem, addr: VAddr, value: u8) -> bool {
-    touchHLE_cpu_write_impl(mem, addr, value)
+extern "C" fn ChronaHLE_cpu_write_u8(mem: *mut ChronaHLE_Mem, addr: VAddr, value: u8) -> bool {
+    ChronaHLE_cpu_write_impl(mem, addr, value)
 }
 #[no_mangle]
-extern "C" fn touchHLE_cpu_write_u16(mem: *mut touchHLE_Mem, addr: VAddr, value: u16) -> bool {
-    touchHLE_cpu_write_impl(mem, addr, value)
+extern "C" fn ChronaHLE_cpu_write_u16(mem: *mut ChronaHLE_Mem, addr: VAddr, value: u16) -> bool {
+    ChronaHLE_cpu_write_impl(mem, addr, value)
 }
 #[no_mangle]
-extern "C" fn touchHLE_cpu_write_u32(mem: *mut touchHLE_Mem, addr: VAddr, value: u32) -> bool {
-    touchHLE_cpu_write_impl(mem, addr, value)
+extern "C" fn ChronaHLE_cpu_write_u32(mem: *mut ChronaHLE_Mem, addr: VAddr, value: u32) -> bool {
+    ChronaHLE_cpu_write_impl(mem, addr, value)
 }
 #[no_mangle]
-extern "C" fn touchHLE_cpu_write_u64(mem: *mut touchHLE_Mem, addr: VAddr, value: u64) -> bool {
-    touchHLE_cpu_write_impl(mem, addr, value)
+extern "C" fn ChronaHLE_cpu_write_u64(mem: *mut ChronaHLE_Mem, addr: VAddr, value: u64) -> bool {
+    ChronaHLE_cpu_write_impl(mem, addr, value)
 }
 
 pub struct Cpu {
-    dynarmic_wrapper: *mut touchHLE_DynarmicWrapper,
+    dynarmic_wrapper: *mut ChronaHLE_DynarmicWrapper,
     /// Copy of the direct memory access pointer used to check it has not
     /// changed. If this is null, direct memory access is not in use.
     direct_memory_access_ptr: *const std::ffi::c_void,
@@ -107,7 +121,7 @@ pub struct Cpu {
 
 impl Drop for Cpu {
     fn drop(&mut self) {
-        unsafe { touchHLE_DynarmicWrapper_delete(self.dynarmic_wrapper) }
+        unsafe { ChronaHLE_DynarmicWrapper_delete(self.dynarmic_wrapper) }
     }
 }
 
@@ -170,7 +184,7 @@ impl Cpu {
                 mem.direct_memory_access_ptr()
             });
         let dynarmic_wrapper =
-            unsafe { touchHLE_DynarmicWrapper_new(direct_memory_access_ptr, null_page_count) };
+            unsafe { ChronaHLE_DynarmicWrapper_new(direct_memory_access_ptr, null_page_count) };
         Cpu {
             dynarmic_wrapper,
             direct_memory_access_ptr,
@@ -179,13 +193,13 @@ impl Cpu {
 
     pub fn regs(&self) -> &[u32; 16] {
         unsafe {
-            let ptr = touchHLE_DynarmicWrapper_regs_const(self.dynarmic_wrapper);
+            let ptr = ChronaHLE_DynarmicWrapper_regs_const(self.dynarmic_wrapper);
             &*(ptr as *const [u32; 16])
         }
     }
     pub fn regs_mut(&mut self) -> &mut [u32; 16] {
         unsafe {
-            let ptr = touchHLE_DynarmicWrapper_regs_mut(self.dynarmic_wrapper);
+            let ptr = ChronaHLE_DynarmicWrapper_regs_mut(self.dynarmic_wrapper);
             &mut *(ptr as *mut [u32; 16])
         }
     }
@@ -222,16 +236,16 @@ impl Cpu {
     }
 
     pub fn cpsr(&self) -> u32 {
-        unsafe { touchHLE_DynarmicWrapper_cpsr(self.dynarmic_wrapper) }
+        unsafe { ChronaHLE_DynarmicWrapper_cpsr(self.dynarmic_wrapper) }
     }
     pub fn set_cpsr(&mut self, cpsr: u32) {
-        unsafe { touchHLE_DynarmicWrapper_set_cpsr(self.dynarmic_wrapper, cpsr) }
+        unsafe { ChronaHLE_DynarmicWrapper_set_cpsr(self.dynarmic_wrapper, cpsr) }
     }
 
     /// Swap the current state of the CPU (registers etc) with the state stored
     /// in the context object.
     pub fn swap_context(&mut self, context: &mut CpuContext) {
-        unsafe { touchHLE_DynarmicWrapper_swap_context(self.dynarmic_wrapper, context) }
+        unsafe { ChronaHLE_DynarmicWrapper_swap_context(self.dynarmic_wrapper, context) }
     }
 
     /// Get PC with the Thumb bit appropriately set.
@@ -268,7 +282,7 @@ impl Cpu {
     /// code.
     pub fn invalidate_cache_range(&mut self, base: VAddr, size: GuestUSize) {
         unsafe {
-            touchHLE_DynarmicWrapper_invalidate_cache_range(self.dynarmic_wrapper, base, size)
+            ChronaHLE_DynarmicWrapper_invalidate_cache_range(self.dynarmic_wrapper, base, size)
         }
     }
 
@@ -283,19 +297,44 @@ impl Cpu {
     /// This will return either because the CPU ran out of time, or because
     /// something else happened which requires attention from the host.
     #[must_use]
-    pub fn run_or_step(&mut self, mem: &mut Mem, ticks: Option<&mut u64>) -> CpuState {
+    pub fn run_or_step(&mut self, mem: &mut Mem, mut ticks: Option<&mut u64>) -> CpuState {
         // See ::new() for why this is done.
         if !self.direct_memory_access_ptr.is_null() {
             assert!(self.direct_memory_access_ptr == unsafe { mem.direct_memory_access_ptr() });
         }
 
+        static PROFILE_STALLS: OnceLock<bool> = OnceLock::new();
+        let profile_stalls =
+            *PROFILE_STALLS.get_or_init(|| crate::host_env_var_os("PROFILE_STALLS").is_some());
+        let ticks_before = profile_stalls.then(|| ticks.as_deref().copied());
+        let pc_before = profile_stalls.then(|| self.regs()[Self::PC]);
+        let started = profile_stalls.then(Instant::now);
         let res = unsafe {
-            touchHLE_DynarmicWrapper_run_or_step(
+            ChronaHLE_DynarmicWrapper_run_or_step(
                 self.dynarmic_wrapper,
-                mem as *mut Mem as *mut touchHLE_Mem,
-                ticks,
+                mem as *mut Mem as *mut ChronaHLE_Mem,
+                ticks.as_deref_mut(),
             )
         };
+        if let Some(started) = started {
+            let elapsed = started.elapsed();
+            if elapsed >= Duration::from_millis(20) {
+                let ticks_after = ticks.as_deref().copied();
+                let ticks_used = ticks_before
+                    .flatten()
+                    .zip(ticks_after)
+                    .map(|(before, after)| before.saturating_sub(after));
+                log!(
+                    "Slow guest CPU slice: {:.1} ms, PC {:#010x} -> {:#010x}, ticks {:?} -> {:?} (used {:?})",
+                    elapsed.as_secs_f64() * 1000.0,
+                    pc_before.unwrap(),
+                    self.regs()[Self::PC],
+                    ticks_before.unwrap(),
+                    ticks_after,
+                    ticks_used,
+                );
+            }
+        }
         match res {
             -1 => CpuState::Normal,
             -2 => CpuState::Error(CpuError::MemoryError),
