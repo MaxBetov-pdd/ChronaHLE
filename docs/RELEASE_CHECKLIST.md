@@ -41,8 +41,8 @@ Application identifier: `com.lego.ninjago.thefinalbattle`.
 - Every Android native library has 16 KB-compatible LOAD alignment.
 - No IPA, extracted application, log, keystore or local path is present in Git.
 - `--copyright` shows MPL-2.0 and touchHLE attribution.
-- Release notes list known limitations, especially Android GLES2 until its
-  physical-device test is complete.
+- Release notes list known limitations, including host-specific graphics and
+  audio differences still observed in tested applications.
 
 The GitHub `release` environment should require manual approval. Approval means
 the tester has completed this checklist for the candidate commit.
